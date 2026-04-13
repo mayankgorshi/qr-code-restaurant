@@ -1,4 +1,5 @@
 {
-  "framework": "vite",
-  "root": "restaurent-react"
+  "buildCommand": "cd restaurent-react && npm install && npm run build",
+  "outputDirectory": "restaurent-react/dist",
+  "framework": "vite"
 }
