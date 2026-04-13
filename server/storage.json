@@ -1,0 +1,489 @@
+{
+  "restaurants": [
+    {
+      "_id": "69dc61b43b0a651bb0e9375c",
+      "restaurantName": "Foodie Demo",
+      "ownerName": "Demo Owner",
+      "email": "demo@foodie.local",
+      "slug": "foodie-demo",
+      "passwordHash": "fe03bdfa84329aef6ec6e71d8dd54684:4b4387e968d2b95fad9ac59600116cf41b954e2751bedbc647315d07461213c72b185afce20e00bf1960f4553854f32d82f393fb0f9ec179735faecdbad65142",
+      "logo": "",
+      "publicDescription": "This sample restaurant shows how each subscriber can publish a QR menu and manage it from the owner dashboard.",
+      "subscriptionPlan": "yearly",
+      "subscriptionStatus": "active",
+      "menu": [
+        {
+          "itemId": "seed-1",
+          "name": "Chole Bhature",
+          "price": 145,
+          "category": "Street Food",
+          "image": "https://thewhiskaddict.com/wp-content/uploads/2024/08/IMG_0727-4-scaled.jpg",
+          "ingredients": [
+            "Chickpeas",
+            "Flour",
+            "Yogurt",
+            "Onion",
+            "Tomato",
+            "Green Chili",
+            "Spice Mix",
+            "Coriander"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-2",
+          "name": "Pao Bhaji",
+          "price": 140,
+          "category": "Street Food",
+          "image": "https://www.cookshideout.com/wp-content/uploads/2015/05/Instant-Pot-Pav-Bhaji_FI.jpg",
+          "ingredients": [
+            "Potato",
+            "Butter",
+            "Tomato",
+            "Capsicum",
+            "Peas",
+            "Onion",
+            "Pav Bread",
+            "Spice Mix"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-3",
+          "name": "Aloo Tikki",
+          "price": 80,
+          "category": "Street Food",
+          "image": "https://sinfullyspicy.com/wp-content/uploads/2023/03/1-1.jpg",
+          "ingredients": [
+            "Potato",
+            "Peas",
+            "Cornflour",
+            "Onion",
+            "Coriander",
+            "Green Chili",
+            "Breadcrumbs",
+            "Spice Mix"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-4",
+          "name": "Samosa",
+          "price": 38,
+          "category": "Street Food",
+          "image": "https://images.unsplash.com/photo-1601050690597-df0568f70950",
+          "ingredients": [
+            "Flour",
+            "Potato",
+            "Peas",
+            "Cumin",
+            "Green Chili",
+            "Coriander",
+            "Oil",
+            "Spice Mix"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-5",
+          "name": "Gol Gappa",
+          "price": 57,
+          "category": "Street Food",
+          "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRdiLt17KVILUi_aVY9OBI2m2JJhKsaqe2kZg&s",
+          "ingredients": [
+            "Semolina Shells",
+            "Potato",
+            "Chickpeas",
+            "Mint Water",
+            "Tamarind",
+            "Cumin",
+            "Black Salt",
+            "Onion"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-6",
+          "name": "Crispy Chilli Potato",
+          "price": 170,
+          "category": "China Express",
+          "image": "https://instamart-media-assets.swiggy.com/swiggy/image/upload/fl_lossy,f_auto,q_auto,h_960,w_960//InstamartAssets/1/honey_chilli_potato.webp",
+          "ingredients": [
+            "Potato",
+            "Cornflour",
+            "Garlic",
+            "Soy Sauce",
+            "Spring Onion",
+            "Sesame",
+            "Green Chili",
+            "Capsicum"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-7",
+          "name": "Veg Spring Roll",
+          "price": 170,
+          "category": "China Express",
+          "image": "https://cdn.shopify.com/s/files/1/0554/9450/8618/files/veg-spring-rolls-1.webp?v=1748478127",
+          "ingredients": [
+            "Flour Sheets",
+            "Cabbage",
+            "Carrot",
+            "Spring Onion",
+            "Soy Sauce",
+            "Pepper",
+            "Oil",
+            "Garlic"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-8",
+          "name": "Veg Chowmein",
+          "price": 180,
+          "category": "China Express",
+          "image": "https://images.unsplash.com/photo-1612929633738-8fe44f7ec841",
+          "ingredients": [
+            "Noodles",
+            "Cabbage",
+            "Carrot",
+            "Capsicum",
+            "Soy Sauce",
+            "Garlic",
+            "Spring Onion",
+            "Pepper"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-9",
+          "name": "Hakka Noodles",
+          "price": 200,
+          "category": "China Express",
+          "image": "https://tiffinandteaofficial.com/wp-content/uploads/2020/11/IMG_7663-1-scaled-e1605519663454.jpg",
+          "ingredients": [
+            "Noodles",
+            "Cabbage",
+            "Carrot",
+            "Beans",
+            "Soy Sauce",
+            "Garlic",
+            "Pepper",
+            "Spring Onion"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-10",
+          "name": "Veg Fried Rice",
+          "price": 200,
+          "category": "China Express",
+          "image": "https://images.unsplash.com/photo-1603133872878-684f208fb84b",
+          "ingredients": [
+            "Rice",
+            "Carrot",
+            "Beans",
+            "Capsicum",
+            "Soy Sauce",
+            "Garlic",
+            "Spring Onion",
+            "Pepper"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-11",
+          "name": "Green Salad",
+          "price": 130,
+          "category": "Salad",
+          "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd",
+          "ingredients": [
+            "Cucumber",
+            "Tomato",
+            "Onion",
+            "Carrot",
+            "Lemon",
+            "Black Pepper",
+            "Salt",
+            "Coriander"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-12",
+          "name": "Chipotle Paneer Sandwich",
+          "price": 95,
+          "category": "Continental",
+          "image": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af",
+          "ingredients": [
+            "Bread",
+            "Paneer",
+            "Chipotle Sauce",
+            "Onion",
+            "Capsicum",
+            "Cheese",
+            "Butter",
+            "Lettuce"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-13",
+          "name": "Veg Burger",
+          "price": 120,
+          "category": "Continental",
+          "image": "https://images.unsplash.com/photo-1550547660-d9450f859349",
+          "ingredients": [
+            "Burger Bun",
+            "Veg Patty",
+            "Mayonnaise",
+            "Lettuce",
+            "Tomato",
+            "Onion",
+            "Cheese",
+            "Pickles"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-14",
+          "name": "Paneer Grilled Sandwich",
+          "price": 150,
+          "category": "Continental",
+          "image": "https://static.toiimg.com/photo/60043279.cms",
+          "ingredients": [
+            "Bread",
+            "Paneer",
+            "Cheese",
+            "Butter",
+            "Onion",
+            "Capsicum",
+            "Mint Chutney",
+            "Tomato"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-15",
+          "name": "Cheese Pizza",
+          "price": 200,
+          "category": "Continental",
+          "image": "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3",
+          "ingredients": [
+            "Pizza Base",
+            "Cheese",
+            "Tomato Sauce",
+            "Oregano",
+            "Olive Oil",
+            "Capsicum",
+            "Onion",
+            "Chili Flakes"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-16",
+          "name": "Vada Sambhar",
+          "price": 130,
+          "category": "South Indian",
+          "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSmHnRRl6eFPkcyqTY-CktrHNJ14c-e9ZHEfQ&s",
+          "ingredients": [
+            "Lentils",
+            "Rice",
+            "Curry Leaves",
+            "Mustard Seeds",
+            "Dry Red Chili",
+            "Onion",
+            "Coriander",
+            "Oil"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-17",
+          "name": "Idli Sambhar",
+          "price": 130,
+          "category": "South Indian",
+          "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSd_q_aLnvh4fo0wMaDx712JYym79oXimH60w&s",
+          "ingredients": [
+            "Rice",
+            "Urad Dal",
+            "Fenugreek",
+            "Lentils",
+            "Mustard Seeds",
+            "Curry Leaves",
+            "Ghee",
+            "Coriander"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-18",
+          "name": "Masala Dosa",
+          "price": 180,
+          "category": "South Indian",
+          "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRYH7H-KRy-dnN9To-d5TJu7dKpY3f_nr0w3Q&s",
+          "ingredients": [
+            "Rice Batter",
+            "Potato",
+            "Onion",
+            "Mustard Seeds",
+            "Curry Leaves",
+            "Ghee",
+            "Green Chili",
+            "Coriander"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-19",
+          "name": "Paneer Dosa",
+          "price": 200,
+          "category": "South Indian",
+          "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTIWUJW5ZkQBVO1KiBXtNl1xW0hZQXGMzXJCw&s",
+          "ingredients": [
+            "Rice Batter",
+            "Paneer",
+            "Onion",
+            "Cheese",
+            "Capsicum",
+            "Mustard Seeds",
+            "Curry Leaves",
+            "Ghee"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-20",
+          "name": "Chilli Paneer with Fried Rice",
+          "price": 220,
+          "category": "Rice Bowl",
+          "image": "https://cdn.uengage.io/uploads/48101/image-3433-1762684763.jpg",
+          "ingredients": [
+            "Paneer",
+            "Rice",
+            "Soy Sauce",
+            "Garlic",
+            "Capsicum",
+            "Spring Onion",
+            "Green Chili",
+            "Cornflour"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-21",
+          "name": "Veg Manchurian with Fried Rice",
+          "price": 210,
+          "category": "Rice Bowl",
+          "image": "https://image.cdn.shpy.in/392528/SKU-0829_0-1757578043008.jpg?width=600&format=webp",
+          "ingredients": [
+            "Veg Manchurian",
+            "Rice",
+            "Cabbage",
+            "Carrot",
+            "Soy Sauce",
+            "Garlic",
+            "Spring Onion",
+            "Cornflour"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-22",
+          "name": "Dal Makhani with Rice",
+          "price": 220,
+          "category": "Rice Bowl",
+          "image": "https://www.jewelofasia.com.au/cdn/shop/files/Dal-Makhani-with-Basmati-Rice_8d9176ff-a736-417e-907a-ee114b489522.jpg?v=1753410313",
+          "ingredients": [
+            "Black Lentils",
+            "Cream",
+            "Butter",
+            "Tomato",
+            "Rice",
+            "Ginger",
+            "Garlic",
+            "Spice Mix"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-23",
+          "name": "Dal Makhani",
+          "price": 300,
+          "category": "A La Carte",
+          "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoydDZqYAOKVPs2vv1TDwg78fs89IbL7aFzA&s",
+          "ingredients": [
+            "Black Lentils",
+            "Cream",
+            "Butter",
+            "Tomato",
+            "Ginger",
+            "Garlic",
+            "Coriander",
+            "Spice Mix"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-24",
+          "name": "Shahi Paneer",
+          "price": 310,
+          "category": "A La Carte",
+          "image": "https://indianshealthyrecipes.com/wp-content/uploads/2024/07/ShahiPaneer-3.jpg",
+          "ingredients": [
+            "Paneer",
+            "Cream",
+            "Butter",
+            "Tomato",
+            "Cashew",
+            "Onion",
+            "Ginger",
+            "Spice Mix"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-25",
+          "name": "Paneer Butter Masala",
+          "price": 310,
+          "category": "A La Carte",
+          "image": "https://vegecravings.com/wp-content/uploads/2017/04/paneer-butter-masala-recipe-step-by-step-instructions.jpg",
+          "ingredients": [
+            "Paneer",
+            "Butter",
+            "Tomato",
+            "Cream",
+            "Cashew",
+            "Onion",
+            "Ginger",
+            "Spice Mix"
+          ],
+          "isAvailable": true
+        },
+        {
+          "itemId": "seed-26",
+          "name": "Jeera Rice",
+          "price": 195,
+          "category": "A La Carte",
+          "image": "https://www.indianhealthyrecipes.com/wp-content/uploads/2022/12/jeera-rice-recipe.jpg",
+          "ingredients": [
+            "Rice",
+            "Cumin",
+            "Ghee",
+            "Coriander",
+            "Bay Leaf",
+            "Clove",
+            "Salt",
+            "Green Chili"
+          ],
+          "isAvailable": true
+        }
+      ],
+      "createdAt": "2026-04-13T03:23:32.349Z",
+      "updatedAt": "2026-04-13T03:23:32.349Z"
+    }
+  ],
+  "orders": []
+}
