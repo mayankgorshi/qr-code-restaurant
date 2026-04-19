@@ -3,15 +3,7 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/create-order",
-      "destination": "/api"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "/api"
-    },
-    {
-      "source": "/((?!assets/|favicon.svg|icons.svg).*)",
+      "source": "/((?!api/|assets/|favicon.svg|icons.svg).*)",
       "destination": "/index.html"
     }
   ]

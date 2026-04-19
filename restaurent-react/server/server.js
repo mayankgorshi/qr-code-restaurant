@@ -849,7 +849,7 @@ app.use(async (req, res, next) => {
   }
 })
 
-app.post("/create-order", async (req, res) => {
+app.post(["/create-order", "/api/create-order"], async (req, res) => {
   if (!razorpay) {
     return res.status(500).json({
       error:

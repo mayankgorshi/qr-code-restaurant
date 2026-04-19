@@ -25,3 +25,4 @@ Optional for full backend persistence:
 - If `MONGO_URI` is not set, the app runs in demo mode with in-memory order data.
 - In demo mode on Vercel, data is not guaranteed to persist between serverless cold starts.
 - Frontend and API are configured to run on the same Vercel domain.
+- API requests are served through the Vercel catch-all function at `/api/*`.

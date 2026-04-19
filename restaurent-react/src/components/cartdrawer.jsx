@@ -177,7 +177,7 @@ function CartDrawer({
         message: `${orderLabel} placed. Opening payment...`
       })
 
-      const response = await fetch(`${apiBaseUrl}/create-order`, {
+      const response = await fetch(`${apiBaseUrl}/api/create-order`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
