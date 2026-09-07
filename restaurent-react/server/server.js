@@ -1,36 +1,42 @@
 require("dotenv").config()
 
 const crypto = require("crypto")
-const fs = require("fs")
-const path = require("path")
 const express = require("express")
 const Razorpay = require("razorpay")
 const cors = require("cors")
-const mongoose = require("mongoose")
+const { Pool } = require("pg")
 const { createDefaultMenu } = require("./defaultMenu")
 
-mongoose.set("bufferCommands", false)
+const pool = new Pool({
+  host: process.env.PGHOST,
+  port: Number(process.env.PGPORT) || 5432,
+  database: process.env.PGDATABASE,
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD
+})
 
 const PORT = Number(process.env.PORT) || 5000
-const IS_VERCEL = Boolean(process.env.VERCEL)
 const DEFAULT_RESTAURANT_SLUG = "foodie-demo"
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
 const SUBSCRIPTION_PLANS = new Set(["monthly", "yearly"])
-const STORAGE_FILE_PATH = path.join(__dirname, "storage.json")
 const SESSION_SECRET =
   process.env.SESSION_SECRET || "restaurant-demo-session-secret"
+
 const app = express()
 
 app.use(express.json())
 app.use(cors())
 
-const inMemoryOrders = []
-const inMemoryRestaurants = []
-let useMemoryStorage = true
+const razorpayKeyId = process.env.RAZORPAY_KEY_ID
+const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
 
-function canUseMongo() {
-  return !useMemoryStorage && mongoose.connection.readyState === 1
-}
+const razorpay =
+  razorpayKeyId && razorpayKeySecret
+    ? new Razorpay({
+        key_id: razorpayKeyId,
+        key_secret: razorpayKeySecret
+      })
+    : null
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : ""
@@ -62,61 +68,14 @@ function slugify(value) {
 
 function normalizeSubscriptionPlan(value) {
   const plan = normalizeString(value).toLowerCase()
+
   return SUBSCRIPTION_PLANS.has(plan) ? plan : "monthly"
 }
-
-function syncCollection(targetCollection, sourceCollection) {
-  targetCollection.length = 0
-  targetCollection.push(...sourceCollection)
-}
-
-function loadMemoryStorage() {
-  if (!fs.existsSync(STORAGE_FILE_PATH)) {
-    return
-  }
-
-  try {
-    const rawStore = fs.readFileSync(STORAGE_FILE_PATH, "utf8")
-
-    if (!rawStore.trim()) {
-      return
-    }
-
-    const parsedStore = JSON.parse(rawStore)
-    const restaurants = Array.isArray(parsedStore.restaurants)
-      ? parsedStore.restaurants
-      : []
-    const orders = Array.isArray(parsedStore.orders) ? parsedStore.orders : []
-
-    syncCollection(inMemoryRestaurants, restaurants)
-    syncCollection(inMemoryOrders, orders)
-  } catch (error) {
-    console.error("Unable to load local storage:", error.message || error)
-  }
-}
-
-function persistMemoryStorage() {
-  if (canUseMongo() || IS_VERCEL) {
-    return
-  }
-
-  const payload = {
-    restaurants: inMemoryRestaurants,
-    orders: inMemoryOrders
-  }
-
-  try {
-    fs.writeFileSync(STORAGE_FILE_PATH, JSON.stringify(payload, null, 2), "utf8")
-  } catch (error) {
-    console.error("Unable to persist local storage:", error.message || error)
-  }
-}
-
-loadMemoryStorage()
 
 function createPasswordHash(password) {
   const salt = crypto.randomBytes(16).toString("hex")
   const hash = crypto.scryptSync(password, salt, 64).toString("hex")
+
   return `${salt}:${hash}`
 }
 
@@ -127,11 +86,16 @@ function verifyPassword(password, storedHash = "") {
     return false
   }
 
-  const nextHash = crypto.scryptSync(password, salt, 64).toString("hex")
-  return crypto.timingSafeEqual(
-    Buffer.from(originalHash, "hex"),
-    Buffer.from(nextHash, "hex")
-  )
+  try {
+    const nextHash = crypto.scryptSync(password, salt, 64).toString("hex")
+
+    return crypto.timingSafeEqual(
+      Buffer.from(originalHash, "hex"),
+      Buffer.from(nextHash, "hex")
+    )
+  } catch {
+    return false
+  }
 }
 
 function createMenuItemId() {
@@ -140,7 +104,9 @@ function createMenuItemId() {
 
 function normalizeMenuItem(item = {}, index = 0) {
   return {
-    itemId: normalizeString(item.itemId) || `item-${index + 1}-${createMenuItemId()}`,
+    itemId:
+      normalizeString(item.itemId) ||
+      `item-${index + 1}-${createMenuItemId()}`,
     name: normalizeString(item.name) || `Menu Item ${index + 1}`,
     price: Math.max(0, Number(item.price) || 0),
     category: normalizeString(item.category) || "Main Course",
@@ -160,7 +126,12 @@ function normalizeRestaurantInput(payload = {}) {
     publicDescription:
       normalizeString(payload.publicDescription) ||
       "Scan the QR, browse the menu, and place your order in a few taps.",
-    subscriptionPlan: normalizeSubscriptionPlan(payload.subscriptionPlan)
+    subscriptionPlan: normalizeSubscriptionPlan(payload.subscriptionPlan),
+    menu: Array.isArray(payload.menu)
+      ? payload.menu.map((item, index) =>
+          normalizeMenuItem(item, index)
+        )
+      : null
   }
 }
 
@@ -169,8 +140,11 @@ function normalizeRestaurantUpdate(payload = {}) {
   const publicDescription = normalizeString(payload.publicDescription)
   const slug = normalizeString(payload.slug).toLowerCase()
   const logo = normalizeString(payload.logo)
+
   const menu = Array.isArray(payload.menu)
-    ? payload.menu.map((item, index) => normalizeMenuItem(item, index))
+    ? payload.menu.map((item, index) =>
+        normalizeMenuItem(item, index)
+      )
     : null
 
   return {
@@ -182,33 +156,10 @@ function normalizeRestaurantUpdate(payload = {}) {
   }
 }
 
-function buildRestaurantRecord(payload = {}, overrides = {}) {
-  const restaurantName = normalizeString(payload.restaurantName) || "Restaurant"
-  const baseSlug = slugify(payload.slug || restaurantName) || "restaurant"
-
-  return {
-    _id: overrides._id || new mongoose.Types.ObjectId().toString(),
-    restaurantName,
-    ownerName: normalizeString(payload.ownerName) || "Owner",
-    email: normalizeString(payload.email).toLowerCase(),
-    slug: overrides.slug || baseSlug,
-    passwordHash: payload.passwordHash || createPasswordHash(payload.password || "123456"),
-    logo: normalizeString(payload.logo),
-    publicDescription:
-      normalizeString(payload.publicDescription) ||
-      "Scan the QR, browse the menu, and place your order in a few taps.",
-    subscriptionPlan: normalizeSubscriptionPlan(payload.subscriptionPlan),
-    subscriptionStatus: normalizeString(payload.subscriptionStatus) || "active",
-    menu: Array.isArray(payload.menu)
-      ? payload.menu.map((item, index) => normalizeMenuItem(item, index))
-      : createDefaultMenu(),
-    createdAt: overrides.createdAt || new Date(),
-    updatedAt: new Date()
-  }
-}
-
 function sanitizeRestaurantForAuth(restaurant = {}) {
-  const subscriptionPlan = normalizeSubscriptionPlan(restaurant.subscriptionPlan)
+  const subscriptionPlan = normalizeSubscriptionPlan(
+    restaurant.subscriptionPlan
+  )
 
   return {
     id: String(restaurant._id),
@@ -222,12 +173,16 @@ function sanitizeRestaurantForAuth(restaurant = {}) {
     subscriptionStatus: restaurant.subscriptionStatus,
     publicMenuUrl: `/?restaurant=${restaurant.slug}`,
     kitchenUrl: `/kitchen?restaurant=${restaurant.slug}`,
-    menu: Array.isArray(restaurant.menu) ? restaurant.menu : []
+    menu: Array.isArray(restaurant.menu)
+      ? restaurant.menu
+      : []
   }
 }
 
 function sanitizeRestaurantForPublic(restaurant = {}) {
-  const subscriptionPlan = normalizeSubscriptionPlan(restaurant.subscriptionPlan)
+  const subscriptionPlan = normalizeSubscriptionPlan(
+    restaurant.subscriptionPlan
+  )
 
   return {
     restaurantName: restaurant.restaurantName,
@@ -236,7 +191,9 @@ function sanitizeRestaurantForPublic(restaurant = {}) {
     publicDescription: restaurant.publicDescription,
     subscriptionPlan,
     menu: Array.isArray(restaurant.menu)
-      ? restaurant.menu.filter((item) => item.isAvailable !== false)
+      ? restaurant.menu.filter(
+          (item) => item.isAvailable !== false
+        )
       : []
   }
 }
@@ -251,411 +208,590 @@ function normalizeOrderPayload(payload = {}) {
         category: normalizeString(item.category),
         image: normalizeString(item.image),
         ingredients: normalizeStringList(item.ingredients),
-        skipIngredients: normalizeStringList(item.skipIngredients)
+        skipIngredients: normalizeStringList(
+          item.skipIngredients
+        )
       }))
     : []
 
-  const avoidIngredients = normalizeStringList(payload.avoidIngredients)
-  const customerPreferenceAvoidIngredients = normalizeStringList(
-    payload.customerPreferences?.avoidIngredients
+  const avoidIngredients = normalizeStringList(
+    payload.avoidIngredients
   )
-  const specialInstructions = normalizeString(payload.specialInstructions)
-  const customerPreferenceNote = normalizeString(payload.customerPreferences?.note)
+
+  const customerPreferenceAvoidIngredients =
+    normalizeStringList(
+      payload.customerPreferences?.avoidIngredients
+    )
+
+  const specialInstructions = normalizeString(
+    payload.specialInstructions
+  )
+
+  const customerPreferenceNote = normalizeString(
+    payload.customerPreferences?.note
+  )
 
   return {
-    restaurantSlug: normalizeString(payload.restaurantSlug).toLowerCase() || DEFAULT_RESTAURANT_SLUG,
+    restaurantSlug:
+      normalizeString(payload.restaurantSlug).toLowerCase() ||
+      DEFAULT_RESTAURANT_SLUG,
+
     restaurantName: normalizeString(payload.restaurantName),
+
     tableNumber: Number(payload.tableNumber) || 1,
+
     items,
+
     bill: {
       subtotal: Number(payload.bill?.subtotal) || 0,
       gst: Number(payload.bill?.gst) || 0,
       serviceFee: Number(payload.bill?.serviceFee) || 0,
       total: Number(payload.bill?.total) || 0
     },
+
     customerPreferences: {
       avoidIngredients: customerPreferenceAvoidIngredients,
       note: customerPreferenceNote || specialInstructions
     },
+
     avoidIngredients,
     specialInstructions,
-    status: normalizeString(payload.status) || "pending"
+
+    status:
+      normalizeString(payload.status).toLowerCase() ||
+      "pending"
   }
 }
 
-function buildMemoryOrder(payload = {}) {
-  const normalizedPayload = normalizeOrderPayload(payload)
+function mapMenuItems(rows) {
+  return rows.map((item) => ({
+    itemId: item.item_id,
+    name: item.name,
+    price: Number(item.price),
+    category: item.category || "",
+    image: item.image || "",
+    ingredients: item.ingredients || [],
+    isAvailable: item.is_available !== false
+  }))
+}
+
+async function getRestaurantMenu(restaurantId) {
+  const result = await pool.query(
+    `SELECT *
+     FROM menu_items
+     WHERE restaurant_id = $1
+     ORDER BY id ASC`,
+    [restaurantId]
+  )
+
+  return mapMenuItems(result.rows)
+}
+
+async function buildRestaurantFromRow(row) {
+  if (!row) {
+    return null
+  }
+
+  const menu = await getRestaurantMenu(row.id)
 
   return {
-    _id: new mongoose.Types.ObjectId().toString(),
-    ...normalizedPayload,
-    createdAt: new Date()
+    _id: String(row.id),
+    restaurantName: row.restaurant_name,
+    ownerName: row.owner_name || "",
+    email: row.email,
+    slug: row.slug,
+    passwordHash: row.password_hash,
+    logo: row.logo || "",
+    publicDescription: row.public_description || "",
+    subscriptionPlan:
+      row.subscription_plan || "monthly",
+    subscriptionStatus:
+      row.subscription_status || "active",
+    menu,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   }
-}
-
-const MenuItemSchema = new mongoose.Schema(
-  {
-    itemId: String,
-    name: String,
-    price: Number,
-    category: String,
-    image: String,
-    ingredients: [String],
-    isAvailable: {
-      type: Boolean,
-      default: true
-    }
-  },
-  { _id: false }
-)
-
-const RestaurantSchema = new mongoose.Schema(
-  {
-    restaurantName: {
-      type: String,
-      required: true
-    },
-    ownerName: String,
-    email: {
-      type: String,
-      required: true,
-      unique: true
-    },
-    slug: {
-      type: String,
-      required: true,
-      unique: true
-    },
-    passwordHash: {
-      type: String,
-      required: true
-    },
-    logo: String,
-    publicDescription: String,
-    subscriptionPlan: {
-      type: String,
-      default: "monthly"
-    },
-    subscriptionStatus: {
-      type: String,
-      default: "active"
-    },
-    menu: [MenuItemSchema]
-  },
-  {
-    timestamps: true
-  }
-)
-
-const OrderSchema = new mongoose.Schema({
-  restaurantSlug: String,
-  restaurantName: String,
-  tableNumber: Number,
-  items: [
-    {
-      itemId: String,
-      name: String,
-      price: Number,
-      quantity: Number,
-      category: String,
-      image: String,
-      ingredients: [String],
-      skipIngredients: [String]
-    }
-  ],
-  bill: {
-    subtotal: Number,
-    gst: Number,
-    serviceFee: Number,
-    total: Number
-  },
-  customerPreferences: {
-    avoidIngredients: [String],
-    note: String
-  },
-  avoidIngredients: [String],
-  specialInstructions: String,
-  status: {
-    type: String,
-    default: "pending"
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-})
-
-const Restaurant = mongoose.model("Restaurant", RestaurantSchema)
-const Order = mongoose.model("Order", OrderSchema)
-
-function getMemoryRestaurantBySlug(slug) {
-  return inMemoryRestaurants.find((restaurant) => restaurant.slug === slug) || null
-}
-
-function getMemoryRestaurantByEmail(email) {
-  return (
-    inMemoryRestaurants.find((restaurant) => restaurant.email === email.toLowerCase()) ||
-    null
-  )
 }
 
 async function findRestaurantBySlug(slug) {
-  if (canUseMongo()) {
-    return Restaurant.findOne({ slug })
-  }
+  const result = await pool.query(
+    `SELECT *
+     FROM restaurants
+     WHERE slug = $1
+     LIMIT 1`,
+    [normalizeString(slug).toLowerCase()]
+  )
 
-  return getMemoryRestaurantBySlug(slug)
+  return buildRestaurantFromRow(result.rows[0])
 }
 
 async function findRestaurantByEmail(email) {
-  if (canUseMongo()) {
-    return Restaurant.findOne({ email: email.toLowerCase() })
-  }
+  const result = await pool.query(
+    `SELECT *
+     FROM restaurants
+     WHERE email = $1
+     LIMIT 1`,
+    [normalizeString(email).toLowerCase()]
+  )
 
-  return getMemoryRestaurantByEmail(email)
+  return buildRestaurantFromRow(result.rows[0])
 }
 
-async function createUniqueRestaurantSlug(baseName, excludeRestaurantId = "") {
-  const baseSlug = slugify(baseName) || "restaurant"
+async function createUniqueRestaurantSlug(
+  baseName,
+  excludeRestaurantId = ""
+) {
+  const baseSlug =
+    slugify(baseName) || "restaurant"
+
   let candidate = baseSlug
-  let attempt = 1
+  let counter = 2
 
   while (true) {
-    const existingRestaurant = await findRestaurantBySlug(candidate)
+    const result = await pool.query(
+      `SELECT id
+       FROM restaurants
+       WHERE slug = $1
+       LIMIT 1`,
+      [candidate]
+    )
 
     if (
-      !existingRestaurant ||
-      String(existingRestaurant._id) === String(excludeRestaurantId)
+      result.rows.length === 0 ||
+      String(result.rows[0].id) ===
+        String(excludeRestaurantId)
     ) {
       return candidate
     }
 
-    attempt += 1
-    candidate = `${baseSlug}-${attempt}`
+    candidate = `${baseSlug}-${counter}`
+    counter += 1
+  }
+}
+
+async function insertMenuItems(
+  client,
+  restaurantId,
+  menu = []
+) {
+  for (const item of menu) {
+    await client.query(
+      `INSERT INTO menu_items
+       (
+         restaurant_id,
+         item_id,
+         name,
+         price,
+         category,
+         image,
+         ingredients,
+         is_available
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        restaurantId,
+        item.itemId || null,
+        item.name,
+        Number(item.price) || 0,
+        item.category || null,
+        item.image || null,
+        item.ingredients || [],
+        item.isAvailable !== false
+      ]
+    )
+  }
+}
+
+async function seedDefaultMenuForRestaurant(
+  restaurantId
+) {
+  const menu = createDefaultMenu()
+
+  const client = await pool.connect()
+
+  try {
+    await client.query("BEGIN")
+
+    await insertMenuItems(
+      client,
+      restaurantId,
+      menu
+    )
+
+    await client.query("COMMIT")
+
+    console.log(
+      `Seeded ${menu.length} default menu items`
+    )
+  } catch (error) {
+    await client.query("ROLLBACK")
+    throw error
+  } finally {
+    client.release()
   }
 }
 
 async function ensureDefaultRestaurant() {
+  const existing = await findRestaurantBySlug(
+    DEFAULT_RESTAURANT_SLUG
+  )
+
+  if (existing) {
+    if (existing.menu.length === 0) {
+      await seedDefaultMenuForRestaurant(
+        existing._id
+      )
+
+      return findRestaurantBySlug(
+        DEFAULT_RESTAURANT_SLUG
+      )
+    }
+
+    return existing
+  }
+
   const defaultRestaurantPayload = {
     restaurantName: "Foodie Demo",
     ownerName: "Demo Owner",
     email: "demo@foodie.local",
     password: "demo123",
+    logo: "",
     publicDescription:
-      "This sample restaurant shows how each subscriber can publish a QR menu and manage it from the owner dashboard.",
+      "A demo restaurant for testing the ordering system.",
     subscriptionPlan: "yearly",
-    subscriptionStatus: "active",
-    menu: createDefaultMenu()
+    subscriptionStatus: "active"
   }
 
-  if (canUseMongo()) {
-    const existing = await Restaurant.findOne({ slug: DEFAULT_RESTAURANT_SLUG })
+  const client = await pool.connect()
 
-    if (!existing) {
-      const restaurant = buildRestaurantRecord(defaultRestaurantPayload, {
-        slug: DEFAULT_RESTAURANT_SLUG
-      })
+  try {
+    await client.query("BEGIN")
 
-      await Restaurant.create(restaurant)
-    }
-
-    return
-  }
-
-  if (!getMemoryRestaurantBySlug(DEFAULT_RESTAURANT_SLUG)) {
-    inMemoryRestaurants.push(
-      buildRestaurantRecord(defaultRestaurantPayload, {
-        slug: DEFAULT_RESTAURANT_SLUG
-      })
+    const passwordHash = createPasswordHash(
+      defaultRestaurantPayload.password
     )
-    persistMemoryStorage()
+
+    const restaurantResult = await client.query(
+      `INSERT INTO restaurants
+       (
+         restaurant_name,
+         owner_name,
+         email,
+         slug,
+         password_hash,
+         logo,
+         public_description,
+         subscription_plan,
+         subscription_status
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING *`,
+      [
+        defaultRestaurantPayload.restaurantName,
+        defaultRestaurantPayload.ownerName,
+        defaultRestaurantPayload.email,
+        DEFAULT_RESTAURANT_SLUG,
+        passwordHash,
+        defaultRestaurantPayload.logo,
+        defaultRestaurantPayload.publicDescription,
+        defaultRestaurantPayload.subscriptionPlan,
+        defaultRestaurantPayload.subscriptionStatus
+      ]
+    )
+
+    const restaurant = restaurantResult.rows[0]
+
+    await insertMenuItems(
+      client,
+      restaurant.id,
+      createDefaultMenu()
+    )
+
+    await client.query("COMMIT")
+
+    console.log(
+      `Created ${restaurant.restaurant_name} with default menu`
+    )
+
+    return buildRestaurantFromRow(restaurant)
+  } catch (error) {
+    await client.query("ROLLBACK")
+    throw error
+  } finally {
+    client.release()
   }
 }
 
 async function registerRestaurant(payload = {}) {
-  const normalized = normalizeRestaurantInput(payload)
+  const normalized =
+    normalizeRestaurantInput(payload)
 
-  if (!normalized.restaurantName || !normalized.ownerName) {
-    throw new Error("Restaurant name and owner name are required.")
+  if (
+    !normalized.restaurantName ||
+    !normalized.ownerName
+  ) {
+    throw new Error(
+      "Restaurant name and owner name are required."
+    )
   }
 
-  if (!normalized.email || !normalized.password) {
-    throw new Error("Email and password are required.")
-  }
-
-  if (normalized.password.length < 6) {
-    throw new Error("Password must be at least 6 characters.")
-  }
-
-  if (await findRestaurantByEmail(normalized.email)) {
-    throw new Error("This email is already registered.")
-  }
-
-  const uniqueSlug = await createUniqueRestaurantSlug(normalized.restaurantName)
-  const nextRestaurant = buildRestaurantRecord(
-    {
-      ...normalized,
-      passwordHash: createPasswordHash(normalized.password),
-      menu: createDefaultMenu()
-    },
-    {
-      slug: uniqueSlug
-    }
-  )
-
-  if (canUseMongo()) {
-    const restaurant = await Restaurant.create(nextRestaurant)
-    return restaurant
-  }
-
-  inMemoryRestaurants.push(nextRestaurant)
-  persistMemoryStorage()
-  return nextRestaurant
-}
-
-async function resetRestaurantPassword(email, nextPassword) {
-  const normalizedEmail = normalizeString(email).toLowerCase()
-  const normalizedPassword = normalizeString(nextPassword)
-
-  if (!normalizedEmail) {
+  if (!normalized.email) {
     throw new Error("Email is required.")
   }
 
-  if (!normalizedPassword || normalizedPassword.length < 6) {
-    throw new Error("New password must be at least 6 characters.")
+  if (
+    !normalized.password ||
+    normalized.password.length < 6
+  ) {
+    throw new Error(
+      "Password must be at least 6 characters."
+    )
   }
 
-  if (canUseMongo()) {
-    const restaurant = await Restaurant.findOne({ email: normalizedEmail })
-
-    if (!restaurant) {
-      throw new Error("No restaurant account found for this email.")
-    }
-
-    restaurant.passwordHash = createPasswordHash(normalizedPassword)
-    await restaurant.save()
-    return restaurant
+  if (
+    await findRestaurantByEmail(normalized.email)
+  ) {
+    throw new Error(
+      "An account with this email already exists."
+    )
   }
 
-  const restaurant = getMemoryRestaurantByEmail(normalizedEmail)
+  const uniqueSlug =
+    await createUniqueRestaurantSlug(
+      normalized.restaurantName
+    )
 
-  if (!restaurant) {
-    throw new Error("No restaurant account found for this email.")
+  const menu =
+    normalized.menu || createDefaultMenu()
+
+  const client = await pool.connect()
+
+  try {
+    await client.query("BEGIN")
+
+    const passwordHash =
+      createPasswordHash(normalized.password)
+
+    const restaurantResult = await client.query(
+      `INSERT INTO restaurants
+       (
+         restaurant_name,
+         owner_name,
+         email,
+         slug,
+         password_hash,
+         logo,
+         public_description,
+         subscription_plan,
+         subscription_status
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active')
+       RETURNING *`,
+      [
+        normalized.restaurantName,
+        normalized.ownerName,
+        normalized.email,
+        uniqueSlug,
+        passwordHash,
+        normalized.logo || "",
+        normalized.publicDescription || "",
+        normalized.subscriptionPlan || "monthly"
+      ]
+    )
+
+    const restaurantRow =
+      restaurantResult.rows[0]
+
+    await insertMenuItems(
+      client,
+      restaurantRow.id,
+      menu
+    )
+
+    await client.query("COMMIT")
+
+    return buildRestaurantFromRow(
+      restaurantRow
+    )
+  } catch (error) {
+    await client.query("ROLLBACK")
+    throw error
+  } finally {
+    client.release()
   }
-
-  restaurant.passwordHash = createPasswordHash(normalizedPassword)
-  restaurant.updatedAt = new Date()
-  persistMemoryStorage()
-
-  return restaurant
 }
 
-async function updateRestaurantForSession(restaurantId, payload = {}) {
-  const normalized = normalizeRestaurantUpdate(payload)
+async function resetRestaurantPassword(
+  email,
+  nextPassword
+) {
+  const normalizedEmail =
+    normalizeString(email).toLowerCase()
+
+  if (!normalizedEmail || !nextPassword) {
+    throw new Error(
+      "Email and password are required."
+    )
+  }
+
+  if (nextPassword.length < 6) {
+    throw new Error(
+      "Password must be at least 6 characters."
+    )
+  }
+
+  const passwordHash =
+    createPasswordHash(nextPassword)
+
+  const result = await pool.query(
+    `UPDATE restaurants
+     SET password_hash = $1,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE email = $2
+     RETURNING *`,
+    [passwordHash, normalizedEmail]
+  )
+
+  return buildRestaurantFromRow(
+    result.rows[0]
+  )
+}
+
+async function updateRestaurantForSession(
+  restaurantId,
+  payload = {}
+) {
+  const normalized =
+    normalizeRestaurantUpdate(payload)
 
   if (!normalized.restaurantName) {
-    throw new Error("Restaurant name is required.")
+    throw new Error(
+      "Restaurant name is required."
+    )
   }
 
-  if (Array.isArray(normalized.menu) && normalized.menu.length === 0) {
-    throw new Error("Add at least one menu item before saving.")
-  }
-
-  const nextSlug = await createUniqueRestaurantSlug(
-    normalized.slug || normalized.restaurantName,
-    restaurantId
+  const existingResult = await pool.query(
+    `SELECT *
+     FROM restaurants
+     WHERE id = $1
+     LIMIT 1`,
+    [restaurantId]
   )
 
-  if (canUseMongo()) {
-    const restaurant = await Restaurant.findById(restaurantId)
-
-    if (!restaurant) {
-      return null
-    }
-
-    restaurant.restaurantName = normalized.restaurantName
-    restaurant.slug = nextSlug
-    restaurant.logo = normalized.logo
-    restaurant.publicDescription =
-      normalized.publicDescription || restaurant.publicDescription
-    if (Array.isArray(normalized.menu)) {
-      restaurant.menu = normalized.menu
-    }
-
-    await restaurant.save()
-    return restaurant
-  }
-
-  const restaurant = inMemoryRestaurants.find(
-    (entry) => String(entry._id) === String(restaurantId)
-  )
-
-  if (!restaurant) {
+  if (existingResult.rows.length === 0) {
     return null
   }
 
-  restaurant.restaurantName = normalized.restaurantName
-  restaurant.slug = nextSlug
-  restaurant.logo = normalized.logo
-  restaurant.publicDescription =
-    normalized.publicDescription || restaurant.publicDescription
-  if (Array.isArray(normalized.menu)) {
-    restaurant.menu = normalized.menu
-  }
-  restaurant.updatedAt = new Date()
+  const nextSlug =
+    await createUniqueRestaurantSlug(
+      normalized.slug ||
+        normalized.restaurantName,
+      restaurantId
+    )
 
-  persistMemoryStorage()
-  return restaurant
+  const client = await pool.connect()
+
+  try {
+    await client.query("BEGIN")
+
+    const restaurantResult = await client.query(
+      `UPDATE restaurants
+       SET restaurant_name = $1,
+           public_description = $2,
+           slug = $3,
+           logo = $4,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $5
+       RETURNING *`,
+      [
+        normalized.restaurantName,
+        normalized.publicDescription || "",
+        nextSlug,
+        normalized.logo || "",
+        restaurantId
+      ]
+    )
+
+    if (normalized.menu) {
+      await client.query(
+        `DELETE FROM menu_items
+         WHERE restaurant_id = $1`,
+        [restaurantId]
+      )
+
+      await insertMenuItems(
+        client,
+        restaurantId,
+        normalized.menu
+      )
+    }
+
+    await client.query("COMMIT")
+
+    return buildRestaurantFromRow(
+      restaurantResult.rows[0]
+    )
+  } catch (error) {
+    await client.query("ROLLBACK")
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 function createSession(restaurant) {
   const payload = JSON.stringify({
     restaurantId: String(restaurant._id),
-    expiresAt: Date.now() + SESSION_TTL_MS
+    expiresAt:
+      Date.now() + SESSION_TTL_MS
   })
-  const encodedPayload = Buffer.from(payload, "utf8").toString("base64url")
-  const signature = crypto
-    .createHmac("sha256", SESSION_SECRET)
-    .update(payload)
-    .digest("base64url")
+
+  const encodedPayload =
+    Buffer.from(payload, "utf8")
+      .toString("base64url")
+
+  const signature =
+    crypto
+      .createHmac("sha256", SESSION_SECRET)
+      .update(payload)
+      .digest("base64url")
 
   return `${encodedPayload}.${signature}`
 }
 
 function parseSessionToken(token) {
-  const [encodedPayload, signature] = normalizeString(token).split(".")
-
-  if (!encodedPayload || !signature) {
+  if (!token || !token.includes(".")) {
     return null
   }
 
-  let payload = ""
+  const [encodedPayload, signature] =
+    token.split(".")
 
   try {
-    payload = Buffer.from(encodedPayload, "base64url").toString("utf8")
-  } catch {
-    return null
-  }
+    const payload =
+      Buffer.from(
+        encodedPayload,
+        "base64url"
+      ).toString("utf8")
 
-  const expectedSignature = crypto
-    .createHmac("sha256", SESSION_SECRET)
-    .update(payload)
-    .digest("base64url")
+    const expectedSignature =
+      crypto
+        .createHmac(
+          "sha256",
+          SESSION_SECRET
+        )
+        .update(payload)
+        .digest("base64url")
 
-  if (signature.length !== expectedSignature.length) {
-    return null
-  }
+    if (
+      !crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+      )
+    ) {
+      return null
+    }
 
-  if (
-    !crypto.timingSafeEqual(
-      Buffer.from(signature, "utf8"),
-      Buffer.from(expectedSignature, "utf8")
-    )
-  ) {
-    return null
-  }
-
-  try {
     return JSON.parse(payload)
   } catch {
     return null
@@ -663,414 +799,803 @@ function parseSessionToken(token) {
 }
 
 async function getRestaurantFromToken(token) {
-  const session = parseSessionToken(token)
+  const session =
+    parseSessionToken(token)
 
-  if (!session) {
+  if (
+    !session ||
+    session.expiresAt <= Date.now()
+  ) {
     return null
   }
 
-  if (session.expiresAt <= Date.now()) {
-    return null
-  }
+  const result = await pool.query(
+    `SELECT *
+     FROM restaurants
+     WHERE id = $1
+     LIMIT 1`,
+    [session.restaurantId]
+  )
 
-  if (canUseMongo()) {
-    return Restaurant.findById(session.restaurantId)
-  }
-
-  return (
-    inMemoryRestaurants.find(
-      (restaurant) => String(restaurant._id) === String(session.restaurantId)
-    ) || null
+  return buildRestaurantFromRow(
+    result.rows[0]
   )
 }
 
 function getSessionToken(req) {
-  const authHeader = normalizeString(req.headers.authorization)
+  const authorization =
+    normalizeString(
+      req.headers.authorization
+    )
 
-  if (authHeader.toLowerCase().startsWith("bearer ")) {
-    return authHeader.slice(7).trim()
+  if (
+    authorization
+      .toLowerCase()
+      .startsWith("bearer ")
+  ) {
+    return authorization
+      .slice(7)
+      .trim()
   }
 
-  return normalizeString(req.headers["x-session-token"])
-}
-
-async function requireAuth(req, res, next) {
-  const token = getSessionToken(req)
-
-  if (!token) {
-    return res.status(401).json({
-      error: "Login required."
-    })
-  }
-
-  const restaurant = await getRestaurantFromToken(token)
-
-  if (!restaurant) {
-    return res.status(401).json({
-      error: "Your session has expired. Please login again."
-    })
-  }
-
-  req.restaurant = restaurant
-  req.sessionToken = token
-  next()
-}
-
-async function saveOrder(payload) {
-  const normalizedPayload = normalizeOrderPayload(payload)
-  const restaurant = await findRestaurantBySlug(normalizedPayload.restaurantSlug)
-
-  if (!restaurant) {
-    throw new Error("Restaurant not found for this order.")
-  }
-
-  normalizedPayload.restaurantName =
-    normalizedPayload.restaurantName || restaurant.restaurantName
-
-  if (canUseMongo()) {
-    const order = new Order(normalizedPayload)
-    await order.save()
-    return order
-  }
-
-  const order = buildMemoryOrder(normalizedPayload)
-  inMemoryOrders.unshift(order)
-  persistMemoryStorage()
-  return order
-}
-
-async function getOrders(restaurantSlug = "") {
-  const normalizedSlug = normalizeString(restaurantSlug).toLowerCase()
-
-  if (canUseMongo()) {
-    const query = normalizedSlug ? { restaurantSlug: normalizedSlug } : {}
-    return Order.find(query).sort({ createdAt: -1 })
-  }
-
-  const filteredOrders = normalizedSlug
-    ? inMemoryOrders.filter((order) => order.restaurantSlug === normalizedSlug)
-    : [...inMemoryOrders]
-
-  return filteredOrders.sort(
-    (left, right) =>
-      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+  return normalizeString(
+    req.headers["x-session-token"]
   )
 }
 
-async function updateOrderStatus(orderId, status, restaurantSlug = "") {
-  const normalizedRestaurantSlug = normalizeString(restaurantSlug).toLowerCase()
+async function requireAuth(
+  req,
+  res,
+  next
+) {
+  try {
+    const token =
+      getSessionToken(req)
 
-  if (canUseMongo()) {
-    const query = normalizedRestaurantSlug
-      ? { _id: orderId, restaurantSlug: normalizedRestaurantSlug }
-      : { _id: orderId }
+    const restaurant =
+      await getRestaurantFromToken(token)
 
-    return Order.findOneAndUpdate(query, { status }, { new: true })
+    if (!restaurant) {
+      return res.status(401).json({
+        error: "Authentication required."
+      })
+    }
+
+    req.restaurant = restaurant
+    req.sessionToken = token
+
+    next()
+  } catch (error) {
+    console.error(
+      "Authentication error:",
+      error
+    )
+
+    res.status(500).json({
+      error: "Authentication failed."
+    })
+  }
+}
+
+async function saveOrder(payload) {
+  const normalizedPayload =
+    normalizeOrderPayload(payload)
+
+  const restaurant =
+    await findRestaurantBySlug(
+      normalizedPayload.restaurantSlug
+    )
+
+  if (!restaurant) {
+    throw new Error(
+      "Restaurant not found for this order."
+    )
   }
 
-  const order = inMemoryOrders.find((item) => {
-    if (item._id !== orderId) {
-      return false
+  normalizedPayload.restaurantName =
+    normalizedPayload.restaurantName ||
+    restaurant.restaurantName
+
+  const client = await pool.connect()
+
+  try {
+    await client.query("BEGIN")
+
+    const orderResult = await client.query(
+      `INSERT INTO orders
+       (
+         restaurant_id,
+         restaurant_slug,
+         restaurant_name,
+         table_number,
+         subtotal,
+         gst,
+         service_fee,
+         total,
+         avoid_ingredients,
+         special_instructions,
+         customer_preferences,
+         status
+       )
+       VALUES
+       ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       RETURNING *`,
+      [
+        restaurant._id,
+        normalizedPayload.restaurantSlug,
+        normalizedPayload.restaurantName,
+        normalizedPayload.tableNumber,
+        normalizedPayload.bill.subtotal,
+        normalizedPayload.bill.gst,
+        normalizedPayload.bill.serviceFee,
+        normalizedPayload.bill.total,
+        normalizedPayload.avoidIngredients || [],
+        normalizedPayload.specialInstructions || "",
+        normalizedPayload.customerPreferences || {},
+        normalizedPayload.status || "pending"
+      ]
+    )
+
+    const order = orderResult.rows[0]
+
+    for (
+      const item of normalizedPayload.items || []
+    ) {
+      await client.query(
+        `INSERT INTO order_items
+         (
+           order_id,
+           item_id,
+           name,
+           price,
+           quantity,
+           category,
+           image,
+           ingredients,
+           skip_ingredients
+         )
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          order.id,
+          item.itemId || null,
+          item.name,
+          Number(item.price) || 0,
+          Number(item.quantity) || 1,
+          item.category || null,
+          item.image || null,
+          item.ingredients || [],
+          item.skipIngredients || []
+        ]
+      )
     }
 
-    if (!normalizedRestaurantSlug) {
-      return true
-    }
+    await client.query("COMMIT")
 
-    return item.restaurantSlug === normalizedRestaurantSlug
-  })
+    return getOrderById(order.id)
+  } catch (error) {
+    await client.query("ROLLBACK")
+    throw error
+  } finally {
+    client.release()
+  }
+}
 
-  if (!order) {
+async function getOrderById(orderId) {
+  const orderResult = await pool.query(
+    `SELECT *
+     FROM orders
+     WHERE id = $1
+     LIMIT 1`,
+    [orderId]
+  )
+
+  if (orderResult.rows.length === 0) {
     return null
   }
 
-  order.status = status
-  persistMemoryStorage()
-  return order
+  const order = orderResult.rows[0]
+
+  const itemsResult = await pool.query(
+    `SELECT *
+     FROM order_items
+     WHERE order_id = $1
+     ORDER BY id ASC`,
+    [orderId]
+  )
+
+  return {
+    _id: String(order.id),
+    restaurantSlug: order.restaurant_slug,
+    restaurantName: order.restaurant_name,
+    tableNumber: order.table_number,
+
+    items: itemsResult.rows.map(
+      (item) => ({
+        itemId: item.item_id,
+        name: item.name,
+        price: Number(item.price),
+        quantity: item.quantity,
+        category: item.category || "",
+        image: item.image || "",
+        ingredients:
+          item.ingredients || [],
+        skipIngredients:
+          item.skip_ingredients || []
+      })
+    ),
+
+    subtotal: Number(
+      order.subtotal || 0
+    ),
+
+    gst: Number(
+      order.gst || 0
+    ),
+
+    serviceFee: Number(
+      order.service_fee || 0
+    ),
+
+    total: Number(
+      order.total || 0
+    ),
+
+    avoidIngredients:
+      order.avoid_ingredients || [],
+
+    specialInstructions:
+      order.special_instructions || "",
+
+    customerPreferences:
+      order.customer_preferences || {},
+
+    status: order.status,
+    createdAt: order.created_at,
+    updatedAt: order.updated_at
+  }
 }
 
-const razorpayKeyId = process.env.RAZORPAY_KEY_ID
-const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
+async function getOrders(
+  restaurantSlug = ""
+) {
+  const normalizedSlug =
+    normalizeString(
+      restaurantSlug
+    ).toLowerCase()
 
-const razorpay =
-  razorpayKeyId && razorpayKeySecret
-    ? new Razorpay({
-        key_id: razorpayKeyId,
-        key_secret: razorpayKeySecret
-      })
-    : null
+  const query = normalizedSlug
+    ? `SELECT id
+       FROM orders
+       WHERE restaurant_slug = $1
+       ORDER BY created_at DESC`
+    : `SELECT id
+       FROM orders
+       ORDER BY created_at DESC`
+
+  const result = await pool.query(
+    query,
+    normalizedSlug
+      ? [normalizedSlug]
+      : []
+  )
+
+  const orders = []
+
+  for (const row of result.rows) {
+    const order =
+      await getOrderById(row.id)
+
+    if (order) {
+      orders.push(order)
+    }
+  }
+
+  return orders
+}
+
+async function updateOrderStatus(
+  orderId,
+  status,
+  restaurantSlug = ""
+) {
+  const normalizedRestaurantSlug =
+    normalizeString(
+      restaurantSlug
+    ).toLowerCase()
+
+  const query =
+    normalizedRestaurantSlug
+      ? `UPDATE orders
+         SET status = $1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+           AND restaurant_slug = $3
+         RETURNING id`
+      : `UPDATE orders
+         SET status = $1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+         RETURNING id`
+
+  const params =
+    normalizedRestaurantSlug
+      ? [
+          status,
+          orderId,
+          normalizedRestaurantSlug
+        ]
+      : [
+          status,
+          orderId
+        ]
+
+  const result =
+    await pool.query(
+      query,
+      params
+    )
+
+  if (result.rows.length === 0) {
+    return null
+  }
+
+  return getOrderById(
+    result.rows[0].id
+  )
+}
 
 async function initializePersistence() {
-  const mongoUri = normalizeString(process.env.MONGO_URI)
+  await pool.query("SELECT NOW()")
 
-  if (!mongoUri) {
-    useMemoryStorage = true
-    loadMemoryStorage()
-    await ensureDefaultRestaurant()
-    return
-  }
-
-  try {
-    await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 5000
-    })
-    useMemoryStorage = false
-    console.log("MongoDB Connected")
-  } catch (error) {
-    useMemoryStorage = true
-    loadMemoryStorage()
-    console.log("MongoDB connection error:", error.message || error)
-  }
+  console.log("PostgreSQL Connected")
 
   await ensureDefaultRestaurant()
 }
 
-mongoose.connection.on("disconnected", async () => {
-  useMemoryStorage = true
-  loadMemoryStorage()
-  console.log("MongoDB disconnected. Falling back to in-memory storage.")
-  await ensureDefaultRestaurant()
-})
+const startupPromise =
+  initializePersistence().catch(
+    (error) => {
+      console.error(
+        "Failed to initialize storage:",
+        error.message || error
+      )
 
-mongoose.connection.on("error", () => {
-  useMemoryStorage = true
-})
+      throw error
+    }
+  )
 
-const startupPromise = initializePersistence().catch((error) => {
-  console.error("Failed to initialize storage:", error.message || error)
-})
-
-app.use(async (req, res, next) => {
-  try {
-    await startupPromise
-    next()
-  } catch (error) {
-    next(error)
+app.use(
+  async (req, res, next) => {
+    try {
+      await startupPromise
+      next()
+    } catch (error) {
+      next(error)
+    }
   }
-})
+)
 
-app.post(["/create-order", "/api/create-order"], async (req, res) => {
-  if (!razorpay) {
-    return res.status(500).json({
-      error:
-        "Razorpay keys are missing. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in server/.env."
-    })
-  }
-
-  const { amount } = req.body
-
-  if (!amount || Number(amount) <= 0) {
-    return res.status(400).json({
-      error: "A valid amount is required to create a payment order."
-    })
-  }
-
-  try {
-    const order = await razorpay.orders.create({
-      amount: Math.round(Number(amount) * 100),
-      currency: "INR"
-    })
-
-    res.json({
-      ...order,
-      key: razorpayKeyId
-    })
-  } catch (error) {
-    res.status(500).json({
-      error: error.message || "Unable to create Razorpay order."
-    })
-  }
-})
-
-app.post("/api/restaurants/register", async (req, res) => {
-  try {
-    const restaurant = await registerRestaurant(req.body)
-    const token = createSession(restaurant)
-
-    res.status(201).json({
-      success: true,
-      token,
-      restaurant: sanitizeRestaurantForAuth(restaurant),
-      storage: canUseMongo() ? "mongodb" : "memory"
-    })
-  } catch (error) {
-    res.status(400).json({
-      error: error.message || "Unable to create restaurant account."
-    })
-  }
-})
-
-app.post("/api/restaurants/login", async (req, res) => {
-  const email = normalizeString(req.body?.email).toLowerCase()
-  const password = normalizeString(req.body?.password)
-
-  if (!email || !password) {
-    return res.status(400).json({
-      error: "Email and password are required."
-    })
-  }
-
-  const restaurant = await findRestaurantByEmail(email)
-
-  if (!restaurant || !verifyPassword(password, restaurant.passwordHash)) {
-    return res.status(401).json({
-      error: "Invalid email or password."
-    })
-  }
-
-  const token = createSession(restaurant)
-
-  res.json({
-    success: true,
-    token,
-    restaurant: sanitizeRestaurantForAuth(restaurant)
-  })
-})
-
-app.post("/api/restaurants/forgot-password", async (req, res) => {
-  try {
-    await resetRestaurantPassword(req.body?.email, req.body?.password)
-
-    res.json({
-      success: true,
-      message: "Password reset successful. Please login with your new password."
-    })
-  } catch (error) {
-    res.status(400).json({
-      error: error.message || "Unable to reset password."
-    })
-  }
-})
-
-app.get("/api/restaurants/me", requireAuth, async (req, res) => {
-  res.json({
-    success: true,
-    restaurant: sanitizeRestaurantForAuth(req.restaurant)
-  })
-})
-
-app.put("/api/restaurants/me", requireAuth, async (req, res) => {
-  try {
-    const updatedRestaurant = await updateRestaurantForSession(
-      req.restaurant._id,
-      req.body
-    )
-
-    if (!updatedRestaurant) {
-      return res.status(404).json({
-        error: "Restaurant account not found."
+app.post(
+  ["/create-order", "/api/create-order"],
+  async (req, res) => {
+    if (!razorpay) {
+      return res.status(500).json({
+        error:
+          "Razorpay keys are missing. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in server/.env."
       })
     }
 
-    res.json({
-      success: true,
-      restaurant: sanitizeRestaurantForAuth(updatedRestaurant)
-    })
-  } catch (error) {
-    res.status(400).json({
-      error: error.message || "Unable to update restaurant."
-    })
-  }
-})
+    const { amount } = req.body
 
-app.post("/api/restaurants/logout", requireAuth, (req, res) => {
-  res.json({ success: true })
-})
-
-app.get("/api/restaurants/public", async (req, res) => {
-  const slug =
-    normalizeString(req.query.slug).toLowerCase() || DEFAULT_RESTAURANT_SLUG
-  const restaurant = await findRestaurantBySlug(slug)
-
-  if (!restaurant) {
-    return res.status(404).json({
-      error: "Restaurant not found."
-    })
-  }
-
-  res.json({
-    success: true,
-    restaurant: sanitizeRestaurantForPublic(restaurant)
-  })
-})
-
-app.post("/api/orders", async (req, res) => {
-  try {
-    const order = await saveOrder(req.body)
-
-    res.json({
-      success: true,
-      order,
-      storage: canUseMongo() ? "mongodb" : "memory"
-    })
-  } catch (error) {
-    res.status(400).json({
-      error: error.message || "Failed to store order."
-    })
-  }
-})
-
-app.get("/api/orders", async (req, res) => {
-  try {
-    const restaurantSlug = normalizeString(req.query.restaurant)
-    const orders = await getOrders(restaurantSlug)
-
-    res.json(orders)
-  } catch {
-    res.status(500).json({
-      error: "Failed to fetch orders."
-    })
-  }
-})
-
-app.patch("/api/orders/:id/status", async (req, res) => {
-  try {
-    const status = normalizeString(req.body?.status)
-    const restaurantSlug = normalizeString(
-      req.body?.restaurantSlug || req.query.restaurant
-    )
-
-    if (!status) {
+    if (
+      !amount ||
+      Number(amount) <= 0
+    ) {
       return res.status(400).json({
-        error: "Status is required."
+        error:
+          "A valid amount is required to create a payment order."
       })
     }
 
-    const order = await updateOrderStatus(req.params.id, status, restaurantSlug)
+    try {
+      const order =
+        await razorpay.orders.create({
+          amount: Math.round(
+            Number(amount) * 100
+          ),
+          currency: "INR"
+        })
 
-    if (!order) {
-      return res.status(404).json({ error: "Order not found." })
+      res.json({
+        ...order,
+        key: razorpayKeyId
+      })
+    } catch (error) {
+      res.status(500).json({
+        error:
+          error.message ||
+          "Unable to create Razorpay order."
+      })
+    }
+  }
+)
+
+app.post(
+  "/api/restaurants/register",
+  async (req, res) => {
+    try {
+      const restaurant =
+        await registerRestaurant(
+          req.body
+        )
+
+      const token =
+        createSession(restaurant)
+
+      res.status(201).json({
+        success: true,
+        token,
+        restaurant:
+          sanitizeRestaurantForAuth(
+            restaurant
+          ),
+        storage: "postgresql"
+      })
+    } catch (error) {
+      res.status(400).json({
+        error:
+          error.message ||
+          "Unable to create restaurant account."
+      })
+    }
+  }
+)
+
+app.post(
+  "/api/restaurants/login",
+  async (req, res) => {
+    const email =
+      normalizeString(
+        req.body?.email
+      ).toLowerCase()
+
+    const password =
+      normalizeString(
+        req.body?.password
+      )
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error:
+          "Email and password are required."
+      })
     }
 
-    res.json(order)
-  } catch {
-    res.status(500).json({ error: "Failed to update order." })
-  }
-})
+    try {
+      const restaurant =
+        await findRestaurantByEmail(
+          email
+        )
 
-app.use((err, req, res, next) => {
-  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
-    return res.status(400).json({
-      error: "Invalid JSON body received."
+      if (
+        !restaurant ||
+        !verifyPassword(
+          password,
+          restaurant.passwordHash
+        )
+      ) {
+        return res.status(401).json({
+          error:
+            "Invalid email or password."
+        })
+      }
+
+      const token =
+        createSession(restaurant)
+
+      res.json({
+        success: true,
+        token,
+        restaurant:
+          sanitizeRestaurantForAuth(
+            restaurant
+          )
+      })
+    } catch (error) {
+      console.error(
+        "Login error:",
+        error
+      )
+
+      res.status(500).json({
+        error:
+          "Unable to login."
+      })
+    }
+  }
+)
+
+app.post(
+  "/api/restaurants/forgot-password",
+  async (req, res) => {
+    try {
+      const restaurant =
+        await resetRestaurantPassword(
+          req.body?.email,
+          req.body?.password
+        )
+
+      if (!restaurant) {
+        return res.status(404).json({
+          error:
+            "Restaurant account not found."
+        })
+      }
+
+      res.json({
+        success: true,
+        message:
+          "Password reset successful. Please login with your new password."
+      })
+    } catch (error) {
+      res.status(400).json({
+        error:
+          error.message ||
+          "Unable to reset password."
+      })
+    }
+  }
+)
+
+app.get(
+  "/api/restaurants/me",
+  requireAuth,
+  async (req, res) => {
+    res.json({
+      success: true,
+      restaurant:
+        sanitizeRestaurantForAuth(
+          req.restaurant
+        )
     })
   }
+)
 
-  next()
-})
+app.put(
+  "/api/restaurants/me",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const updatedRestaurant =
+        await updateRestaurantForSession(
+          req.restaurant._id,
+          req.body
+        )
 
-app.use((req, res) => {
-  res.status(404).json({
-    error: "Route not found."
-  })
-})
+      if (!updatedRestaurant) {
+        return res.status(404).json({
+          error:
+            "Restaurant account not found."
+        })
+      }
+
+      res.json({
+        success: true,
+        restaurant:
+          sanitizeRestaurantForAuth(
+            updatedRestaurant
+          )
+      })
+    } catch (error) {
+      res.status(400).json({
+        error:
+          error.message ||
+          "Unable to update restaurant."
+      })
+    }
+  }
+)
+
+app.post(
+  "/api/restaurants/logout",
+  requireAuth,
+  (req, res) => {
+    res.json({
+      success: true
+    })
+  }
+)
+
+app.get(
+  "/api/restaurants/public",
+  async (req, res) => {
+    try {
+      const slug =
+        normalizeString(
+          req.query.slug
+        ).toLowerCase() ||
+        DEFAULT_RESTAURANT_SLUG
+
+      const restaurant =
+        await findRestaurantBySlug(
+          slug
+        )
+
+      if (!restaurant) {
+        return res.status(404).json({
+          error:
+            "Restaurant not found."
+        })
+      }
+
+      res.json({
+        success: true,
+        restaurant:
+          sanitizeRestaurantForPublic(
+            restaurant
+          )
+      })
+    } catch (error) {
+      console.error(
+        "Public restaurant error:",
+        error
+      )
+
+      res.status(500).json({
+        error:
+          "Failed to fetch restaurant."
+      })
+    }
+  }
+)
+
+app.post(
+  "/api/orders",
+  async (req, res) => {
+    try {
+      const order =
+        await saveOrder(req.body)
+
+      res.json({
+        success: true,
+        order,
+        storage: "postgresql"
+      })
+    } catch (error) {
+      console.error(
+        "Save order error:",
+        error
+      )
+
+      res.status(400).json({
+        error:
+          error.message ||
+          "Failed to store order."
+      })
+    }
+  }
+)
+
+app.get(
+  "/api/orders",
+  async (req, res) => {
+    try {
+      const restaurantSlug =
+        normalizeString(
+          req.query.restaurant
+        )
+
+      const orders =
+        await getOrders(
+          restaurantSlug
+        )
+
+      res.json(orders)
+    } catch (error) {
+      console.error(
+        "Get orders error:",
+        error
+      )
+
+      res.status(500).json({
+        error:
+          "Failed to fetch orders."
+      })
+    }
+  }
+)
+
+app.patch(
+  "/api/orders/:id/status",
+  async (req, res) => {
+    try {
+      const status =
+        normalizeString(
+          req.body?.status
+        ).toLowerCase()
+
+      const restaurantSlug =
+        normalizeString(
+          req.body?.restaurantSlug ||
+            req.query.restaurant
+        )
+
+      if (!status) {
+        return res.status(400).json({
+          error:
+            "Status is required."
+        })
+      }
+
+      const order =
+        await updateOrderStatus(
+          req.params.id,
+          status,
+          restaurantSlug
+        )
+
+      if (!order) {
+        return res.status(404).json({
+          error:
+            "Order not found."
+        })
+      }
+
+      res.json(order)
+    } catch (error) {
+      console.error(
+        "Update order status error:",
+        error
+      )
+
+      res.status(500).json({
+        error:
+          "Failed to update order."
+      })
+    }
+  }
+)
+
+app.use(
+  (err, req, res, next) => {
+    if (
+      err instanceof SyntaxError &&
+      err.status === 400 &&
+      "body" in err
+    ) {
+      return res.status(400).json({
+        error:
+          "Invalid JSON body received."
+      })
+    }
+
+    next(err)
+  }
+)
+
+app.use(
+  (req, res) => {
+    res.status(404).json({
+      error:
+        "Route not found."
+    })
+  }
+)
 
 if (require.main === module) {
-  startupPromise.finally(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`)
+  startupPromise
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(
+          `Server running on port ${PORT}`
+        )
+      })
     })
-  })
+    .catch(() => {
+      process.exit(1)
+    })
 }
 
 module.exports = app
-module.exports.startupPromise = startupPromise
+module.exports.startupPromise =
+  startupPromise
