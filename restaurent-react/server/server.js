@@ -7,6 +7,7 @@ const express = require("express")
 const Razorpay = require("razorpay")
 const cors = require("cors")
 const { Pool } = require("pg")
+const rateLimit = require("express-rate-limit")
 const { createDefaultMenu } = require("./defaultMenu")
 
 const pool = new Pool({
@@ -22,16 +23,43 @@ const DEFAULT_RESTAURANT_SLUG = "foodie-demo"
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
 const SUBSCRIPTION_PLANS = new Set(["monthly", "yearly"])
 const SESSION_SECRET = process.env.SESSION_SECRET
-
 if (!SESSION_SECRET) {
   throw new Error(
     "SESSION_SECRET is required. Add it to server/.env."
   )
 }
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "Too many authentication attempts. Please try again later."
+  }
+})
+
+const paymentRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "Too many payment requests. Please try again later."
+  }
+})
+
 const app = express()
 
 app.use(express.json())
-app.use(cors())
+app.use(
+  cors({
+    origin:
+      process.env.NODE_ENV === "production"
+        ? process.env.FRONTEND_URL
+        : true
+  })
+)
 
 const razorpayKeyId = process.env.RAZORPAY_KEY_ID
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
@@ -638,42 +666,6 @@ async function registerRestaurant(payload = {}) {
   }
 }
 
-async function resetRestaurantPassword(
-  email,
-  nextPassword
-) {
-  const normalizedEmail =
-    normalizeString(email).toLowerCase()
-
-  if (!normalizedEmail || !nextPassword) {
-    throw new Error(
-      "Email and password are required."
-    )
-  }
-
-  if (nextPassword.length < 6) {
-    throw new Error(
-      "Password must be at least 6 characters."
-    )
-  }
-
-  const passwordHash =
-    createPasswordHash(nextPassword)
-
-  const result = await pool.query(
-    `UPDATE restaurants
-     SET password_hash = $1,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE email = $2
-     RETURNING *`,
-    [passwordHash, normalizedEmail]
-  )
-
-  return buildRestaurantFromRow(
-    result.rows[0]
-  )
-}
-
 async function updateRestaurantForSession(
   restaurantId,
   payload = {}
@@ -1195,6 +1187,7 @@ app.use(
 
 app.post(
   ["/create-order", "/api/create-order"],
+  paymentRateLimiter,
   async (req, res) => {
     if (!razorpay) {
       return res.status(500).json({
@@ -1240,6 +1233,7 @@ app.post(
 
 app.post(
   "/api/restaurants/register",
+  authRateLimiter,
   async (req, res) => {
     try {
       const restaurant =
@@ -1271,6 +1265,7 @@ app.post(
 
 app.post(
   "/api/restaurants/login",
+  authRateLimiter,
   async (req, res) => {
     const email =
       normalizeString(
@@ -1328,38 +1323,6 @@ app.post(
       res.status(500).json({
         error:
           "Unable to login."
-      })
-    }
-  }
-)
-
-app.post(
-  "/api/restaurants/forgot-password",
-  async (req, res) => {
-    try {
-      const restaurant =
-        await resetRestaurantPassword(
-          req.body?.email,
-          req.body?.password
-        )
-
-      if (!restaurant) {
-        return res.status(404).json({
-          error:
-            "Restaurant account not found."
-        })
-      }
-
-      res.json({
-        success: true,
-        message:
-          "Password reset successful. Please login with your new password."
-      })
-    } catch (error) {
-      res.status(400).json({
-        error:
-          error.message ||
-          "Unable to reset password."
       })
     }
   }

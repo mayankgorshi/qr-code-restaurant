@@ -40,22 +40,13 @@ const initialLoginState = {
   password: ""
 }
 
-const initialResetState = {
-  email: "",
-  password: "",
-  confirmPassword: ""
-}
-
 function RestaurantPortal() {
   const navigate = useNavigate()
   const [mode, setMode] = useState("register")
   const [registerForm, setRegisterForm] = useState(initialRegisterState)
   const [loginForm, setLoginForm] = useState(initialLoginState)
-  const [resetForm, setResetForm] = useState(initialResetState)
   const [showRegisterPassword, setShowRegisterPassword] = useState(false)
   const [showLoginPassword, setShowLoginPassword] = useState(false)
-  const [showResetPassword, setShowResetPassword] = useState(false)
-  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState({
     type: "info",
@@ -76,11 +67,6 @@ function RestaurantPortal() {
   function handleLoginChange(event) {
     const { name, value } = event.target
     setLoginForm((current) => ({ ...current, [name]: value }))
-  }
-
-  function handleResetChange(event) {
-    const { name, value } = event.target
-    setResetForm((current) => ({ ...current, [name]: value }))
   }
 
   async function handleRegisterSubmit(event) {
@@ -159,63 +145,6 @@ function RestaurantPortal() {
       setFeedback({
         type: "error",
         message: error.message || "Unable to login."
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handleResetSubmit(event) {
-    event.preventDefault()
-
-    if (resetForm.password !== resetForm.confirmPassword) {
-      setFeedback({
-        type: "error",
-        message: "The passwords do not match."
-      })
-      return
-    }
-
-    setIsSubmitting(true)
-    setFeedback({
-      type: "info",
-      message: "Resetting your password..."
-    })
-
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/restaurants/forgot-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: resetForm.email,
-          password: resetForm.password
-        })
-      })
-
-      await parseJsonResponse(
-        response,
-        "Server sent an invalid response while resetting the password.",
-        "Unable to reset password."
-      )
-
-      setLoginForm({
-        email: resetForm.email,
-        password: ""
-      })
-      setResetForm(initialResetState)
-      setMode("login")
-      setShowResetPassword(false)
-      setShowResetConfirmPassword(false)
-      setFeedback({
-        type: "success",
-        message: "Password reset successful. You can now login with the new password."
-      })
-    } catch (error) {
-      setFeedback({
-        type: "error",
-        message: error.message || "Unable to reset password."
       })
     } finally {
       setIsSubmitting(false)
@@ -309,7 +238,7 @@ function RestaurantPortal() {
           </button>
           <button
             type="button"
-            className={mode === "login" || mode === "reset" ? "active" : ""}
+            className={mode === "login" ? "active" : ""}
             onClick={() => setMode("login")}
           >
             Existing Login
@@ -406,7 +335,7 @@ function RestaurantPortal() {
               {isSubmitting ? "Creating..." : "Create Workspace"}
             </button>
           </form>
-        ) : mode === "login" ? (
+        ) : (
           <form className="portal-form" onSubmit={handleLoginSubmit}>
             <label>
               <span>Email</span>
@@ -441,16 +370,6 @@ function RestaurantPortal() {
               </div>
             </label>
 
-            <div className="portal-inline-actions">
-              <button
-                type="button"
-                className="portal-text-button"
-                onClick={() => setMode("reset")}
-              >
-                Forgot password?
-              </button>
-            </div>
-
             <button type="submit" className="portal-submit" disabled={isSubmitting}>
               {isSubmitting ? "Logging in..." : "Open Dashboard"}
             </button>
@@ -459,80 +378,6 @@ function RestaurantPortal() {
               Demo owner login: <strong>demo@foodie.local</strong> /{" "}
               <strong>demo123</strong>
             </p>
-          </form>
-        ) : (
-          <form className="portal-form" onSubmit={handleResetSubmit}>
-            <label>
-              <span>Registered Email</span>
-              <input
-                type="email"
-                name="email"
-                value={resetForm.email}
-                onChange={handleResetChange}
-                placeholder="owner@restaurant.com"
-                required
-              />
-            </label>
-
-            <label>
-              <span>New Password</span>
-              <div className="portal-password-field">
-                <input
-                  type={showResetPassword ? "text" : "password"}
-                  name="password"
-                  value={resetForm.password}
-                  onChange={handleResetChange}
-                  placeholder="Minimum 6 characters"
-                  minLength={6}
-                  required
-                />
-                <button
-                  type="button"
-                  className="portal-text-button"
-                  onClick={() => setShowResetPassword((current) => !current)}
-                >
-                  {showResetPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-            </label>
-
-            <label>
-              <span>Confirm New Password</span>
-              <div className="portal-password-field">
-                <input
-                  type={showResetConfirmPassword ? "text" : "password"}
-                  name="confirmPassword"
-                  value={resetForm.confirmPassword}
-                  onChange={handleResetChange}
-                  placeholder="Re-enter your new password"
-                  minLength={6}
-                  required
-                />
-                <button
-                  type="button"
-                  className="portal-text-button"
-                  onClick={() =>
-                    setShowResetConfirmPassword((current) => !current)
-                  }
-                >
-                  {showResetConfirmPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-            </label>
-
-            <button type="submit" className="portal-submit" disabled={isSubmitting}>
-              {isSubmitting ? "Resetting..." : "Reset Password"}
-            </button>
-
-            <div className="portal-inline-actions">
-              <button
-                type="button"
-                className="portal-text-button"
-                onClick={() => setMode("login")}
-              >
-                Back to login
-              </button>
-            </div>
           </form>
         )}
       </section>

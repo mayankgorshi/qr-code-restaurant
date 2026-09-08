@@ -26,7 +26,7 @@ function CartDrawer({
     message: ""
   })
   const [placedOrder, setPlacedOrder] = useState(null)
-  const demoPaymentsEnabled = import.meta.env.VITE_ENABLE_DEMO_PAYMENT !== "false"
+  const demoPaymentsEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_PAYMENT === "true"
   const navigate = useNavigate()
   const orderFingerprint = JSON.stringify({
     restaurantSlug,
