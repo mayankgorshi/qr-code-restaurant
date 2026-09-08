@@ -870,6 +870,29 @@ async function requireAuth(
       })
     }
 
+    const subscriptionEndsAt =
+      restaurant.subscriptionEndsAt
+        ? new Date(restaurant.subscriptionEndsAt)
+        : null
+
+    if (
+      restaurant.subscriptionStatus !== "active" &&
+      restaurant.subscriptionStatus !== "trialing"
+    ) {
+      return res.status(403).json({
+        error: "Your subscription is not active."
+      })
+    }
+
+    if (
+      subscriptionEndsAt &&
+      subscriptionEndsAt <= new Date()
+    ) {
+      return res.status(403).json({
+        error: "Your trial or subscription has expired."
+      })
+    }
+
     req.restaurant = restaurant
     req.sessionToken = token
 
