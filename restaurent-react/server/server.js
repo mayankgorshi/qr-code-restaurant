@@ -313,6 +313,12 @@ async function buildRestaurantFromRow(row) {
       row.subscription_plan || "monthly",
     subscriptionStatus:
       row.subscription_status || "active",
+    subscriptionStartedAt:
+      row.subscription_started_at || null,
+    subscriptionEndsAt:
+      row.subscription_ends_at || null,
+    razorpaySubscriptionId:
+      row.razorpay_subscription_id || null,
     menu,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -580,19 +586,25 @@ async function registerRestaurant(payload = {}) {
 
     const restaurantResult = await client.query(
       `INSERT INTO restaurants
-       (
-         restaurant_name,
-         owner_name,
-         email,
-         slug,
-         password_hash,
-         logo,
-         public_description,
-         subscription_plan,
-         subscription_status
-       )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active')
-       RETURNING *`,
+   (
+     restaurant_name,
+     owner_name,
+     email,
+     slug,
+     password_hash,
+     logo,
+     public_description,
+     subscription_plan,
+     subscription_status,
+     subscription_started_at,
+     subscription_ends_at
+   )
+   VALUES (
+     $1,$2,$3,$4,$5,$6,$7,$8,'trialing',
+     CURRENT_TIMESTAMP,
+     CURRENT_TIMESTAMP + INTERVAL '30 days'
+   )
+   RETURNING *`,
       [
         normalized.restaurantName,
         normalized.ownerName,
@@ -604,7 +616,6 @@ async function registerRestaurant(payload = {}) {
         normalized.subscriptionPlan || "monthly"
       ]
     )
-
     const restaurantRow =
       restaurantResult.rows[0]
 
