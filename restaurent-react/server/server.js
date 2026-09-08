@@ -1,4 +1,6 @@
-require("dotenv").config()
+require("dotenv").config({
+  path: require("path").join(__dirname, ".env")
+})
 
 const crypto = require("crypto")
 const express = require("express")
@@ -19,9 +21,13 @@ const PORT = Number(process.env.PORT) || 5000
 const DEFAULT_RESTAURANT_SLUG = "foodie-demo"
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
 const SUBSCRIPTION_PLANS = new Set(["monthly", "yearly"])
-const SESSION_SECRET =
-  process.env.SESSION_SECRET || "restaurant-demo-session-secret"
+const SESSION_SECRET = process.env.SESSION_SECRET
 
+if (!SESSION_SECRET) {
+  throw new Error(
+    "SESSION_SECRET is required. Add it to server/.env."
+  )
+}
 const app = express()
 
 app.use(express.json())
@@ -33,9 +39,9 @@ const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
 const razorpay =
   razorpayKeyId && razorpayKeySecret
     ? new Razorpay({
-        key_id: razorpayKeyId,
-        key_secret: razorpayKeySecret
-      })
+      key_id: razorpayKeyId,
+      key_secret: razorpayKeySecret
+    })
     : null
 
 function normalizeString(value) {
@@ -129,8 +135,8 @@ function normalizeRestaurantInput(payload = {}) {
     subscriptionPlan: normalizeSubscriptionPlan(payload.subscriptionPlan),
     menu: Array.isArray(payload.menu)
       ? payload.menu.map((item, index) =>
-          normalizeMenuItem(item, index)
-        )
+        normalizeMenuItem(item, index)
+      )
       : null
   }
 }
@@ -143,8 +149,8 @@ function normalizeRestaurantUpdate(payload = {}) {
 
   const menu = Array.isArray(payload.menu)
     ? payload.menu.map((item, index) =>
-        normalizeMenuItem(item, index)
-      )
+      normalizeMenuItem(item, index)
+    )
     : null
 
   return {
@@ -192,8 +198,8 @@ function sanitizeRestaurantForPublic(restaurant = {}) {
     subscriptionPlan,
     menu: Array.isArray(restaurant.menu)
       ? restaurant.menu.filter(
-          (item) => item.isAvailable !== false
-        )
+        (item) => item.isAvailable !== false
+      )
       : []
   }
 }
@@ -201,17 +207,17 @@ function sanitizeRestaurantForPublic(restaurant = {}) {
 function normalizeOrderPayload(payload = {}) {
   const items = Array.isArray(payload.items)
     ? payload.items.map((item) => ({
-        itemId: normalizeString(item.itemId),
-        name: normalizeString(item.name),
-        price: Number(item.price) || 0,
-        quantity: Number(item.quantity) || 0,
-        category: normalizeString(item.category),
-        image: normalizeString(item.image),
-        ingredients: normalizeStringList(item.ingredients),
-        skipIngredients: normalizeStringList(
-          item.skipIngredients
-        )
-      }))
+      itemId: normalizeString(item.itemId),
+      name: normalizeString(item.name),
+      price: Number(item.price) || 0,
+      quantity: Number(item.quantity) || 0,
+      category: normalizeString(item.category),
+      image: normalizeString(item.image),
+      ingredients: normalizeStringList(item.ingredients),
+      skipIngredients: normalizeStringList(
+        item.skipIngredients
+      )
+    }))
     : []
 
   const avoidIngredients = normalizeStringList(
@@ -359,7 +365,7 @@ async function createUniqueRestaurantSlug(
     if (
       result.rows.length === 0 ||
       String(result.rows[0].id) ===
-        String(excludeRestaurantId)
+      String(excludeRestaurantId)
     ) {
       return candidate
     }
@@ -685,7 +691,7 @@ async function updateRestaurantForSession(
   const nextSlug =
     await createUniqueRestaurantSlug(
       normalized.slug ||
-        normalized.restaurantName,
+      normalized.restaurantName,
       restaurantId
     )
 
@@ -1120,14 +1126,14 @@ async function updateOrderStatus(
   const params =
     normalizedRestaurantSlug
       ? [
-          status,
-          orderId,
-          normalizedRestaurantSlug
-        ]
+        status,
+        orderId,
+        normalizedRestaurantSlug
+      ]
       : [
-          status,
-          orderId
-        ]
+        status,
+        orderId
+      ]
 
   const result =
     await pool.query(
@@ -1149,9 +1155,10 @@ async function initializePersistence() {
 
   console.log("PostgreSQL Connected")
 
-  await ensureDefaultRestaurant()
+  if (process.env.NODE_ENV !== "production") {
+    await ensureDefaultRestaurant()
+  }
 }
-
 const startupPromise =
   initializePersistence().catch(
     (error) => {
@@ -1517,7 +1524,7 @@ app.patch(
       const restaurantSlug =
         normalizeString(
           req.body?.restaurantSlug ||
-            req.query.restaurant
+          req.query.restaurant
         )
 
       if (!status) {
