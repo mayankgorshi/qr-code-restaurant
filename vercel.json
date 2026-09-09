@@ -1,5 +1,10 @@
 {
-  "buildCommand": "cd restaurent-react && npm install && npm run build",
-  "outputDirectory": "restaurent-react/dist",
-  "framework": "vite"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/((?!api/|assets/|favicon.svg|icons.svg).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
