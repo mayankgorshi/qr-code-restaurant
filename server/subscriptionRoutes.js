@@ -192,6 +192,54 @@ router.get("/status", requireRestaurant, async (req, res) => {
   })
 })
 
+router.post("/start-trial", requireRestaurant, async (req, res) => {
+  if (req.restaurant.subscription_status !== "trial_available") {
+    return res.status(400).json({
+      error: "Your free trial is no longer available."
+    })
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE restaurants
+       SET subscription_status = 'trialing',
+           subscription_started_at = CURRENT_TIMESTAMP,
+           subscription_ends_at = CURRENT_TIMESTAMP + INTERVAL '30 days',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND subscription_status = 'trial_available'
+       RETURNING subscription_plan,
+                 subscription_status,
+                 subscription_started_at,
+                 subscription_ends_at`,
+      [req.restaurant.id]
+    )
+
+    if (!result.rows[0]) {
+      return res.status(409).json({
+        error: "Your free trial is no longer available."
+      })
+    }
+
+    const row = result.rows[0]
+
+    return res.json({
+      subscription: {
+        plan: row.subscription_plan,
+        status: row.subscription_status,
+        startedAt: row.subscription_started_at,
+        endsAt: row.subscription_ends_at
+      }
+    })
+  } catch (error) {
+    console.error("Start trial error:", error)
+
+    return res.status(500).json({
+      error: "Unable to start the free trial."
+    })
+  }
+})
+
 router.post("/create", requireRestaurant, async (req, res) => {
   if (!razorpay) {
     return res.status(503).json({
