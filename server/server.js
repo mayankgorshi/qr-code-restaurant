@@ -1577,9 +1577,10 @@ app.use(
   }
 )
 
+app.use("/api/subscriptions", require("./subscriptionRoutes"))
+
 app.use(
   (req, res) => {
-app.use("/api/subscriptions", require("./subscriptionRoutes"))
 
     res.status(404).json({
       error:
