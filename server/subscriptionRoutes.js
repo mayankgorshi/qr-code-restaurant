@@ -165,20 +165,59 @@ router.get("/status", requireRestaurant, async (req, res) => {
     ? new Date(row.subscription_ends_at)
     : null
 
+  const now = new Date()
+
   if (
     endsAt &&
-    endsAt <= new Date() &&
-    !["cancelled", "expired"].includes(row.subscription_status)
+    endsAt <= now &&
+    ["active", "trialing"].includes(row.subscription_status)
   ) {
-    await pool.query(
-      `UPDATE restaurants
-       SET subscription_status = 'expired',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
-      [row.id]
+    const graceEndsAt = new Date(
+      endsAt.getTime() + 3 * 24 * 60 * 60 * 1000
     )
 
-    row.subscription_status = "expired"
+    if (now < graceEndsAt) {
+      await pool.query(
+        `UPDATE restaurants
+         SET subscription_status = 'grace',
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+           AND subscription_status = $2`,
+        [row.id, row.subscription_status]
+      )
+
+      row.subscription_status = "grace"
+    } else {
+      await pool.query(
+        `UPDATE restaurants
+         SET subscription_status = 'expired',
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [row.id]
+      )
+
+      row.subscription_status = "expired"
+    }
+  } else if (
+    endsAt &&
+    row.subscription_status === "grace"
+  ) {
+    const graceEndsAt = new Date(
+      endsAt.getTime() + 3 * 24 * 60 * 60 * 1000
+    )
+
+    if (now >= graceEndsAt) {
+      await pool.query(
+        `UPDATE restaurants
+         SET subscription_status = 'expired',
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+           AND subscription_status = 'grace'`,
+        [row.id]
+      )
+
+      row.subscription_status = "expired"
+    }
   }
 
   return res.json({

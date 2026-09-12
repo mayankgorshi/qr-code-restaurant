@@ -205,6 +205,8 @@ function sanitizeRestaurantForAuth(restaurant = {}) {
     publicDescription: restaurant.publicDescription,
     subscriptionPlan,
     subscriptionStatus: restaurant.subscriptionStatus,
+    subscriptionStartedAt: restaurant.subscriptionStartedAt || null,
+    subscriptionEndsAt: restaurant.subscriptionEndsAt || null,
     publicMenuUrl: `/?restaurant=${restaurant.slug}`,
     kitchenUrl: `/kitchen?restaurant=${restaurant.slug}`,
     menu: Array.isArray(restaurant.menu)
@@ -870,29 +872,6 @@ async function requireAuth(
       })
     }
 
-    const subscriptionEndsAt =
-      restaurant.subscriptionEndsAt
-        ? new Date(restaurant.subscriptionEndsAt)
-        : null
-
-    if (
-      restaurant.subscriptionStatus !== "active" &&
-      restaurant.subscriptionStatus !== "trialing"
-    ) {
-      return res.status(403).json({
-        error: "Your subscription is not active."
-      })
-    }
-
-    if (
-      subscriptionEndsAt &&
-      subscriptionEndsAt <= new Date()
-    ) {
-      return res.status(403).json({
-        error: "Your trial or subscription has expired."
-      })
-    }
-
     req.restaurant = restaurant
     req.sessionToken = token
 
@@ -907,6 +886,46 @@ async function requireAuth(
       error: "Authentication failed."
     })
   }
+}
+
+function hasOperationalSubscriptionAccess(restaurant) {
+  if (!restaurant || !restaurant.subscriptionEndsAt) return false
+
+  const endsAt = new Date(restaurant.subscriptionEndsAt)
+  const now = new Date()
+
+  if (
+    (restaurant.subscriptionStatus === "active" ||
+      restaurant.subscriptionStatus === "trialing") &&
+    endsAt > now
+  ) {
+    return true
+  }
+
+  if (
+    ["active", "trialing", "grace"].includes(
+      restaurant.subscriptionStatus
+    )
+  ) {
+    const graceEndsAt = new Date(
+      endsAt.getTime() + 3 * 24 * 60 * 60 * 1000
+    )
+
+    return now < graceEndsAt
+  }
+
+  return false
+}
+
+function requireActiveSubscription(req, res, next) {
+  if (hasOperationalSubscriptionAccess(req.restaurant)) {
+    return next()
+  }
+
+  return res.status(403).json({
+    error:
+      "Your subscription is not active. Please renew to continue."
+  })
 }
 
 async function saveOrder(payload) {
@@ -1368,6 +1387,7 @@ app.get(
 app.put(
   "/api/restaurants/me",
   requireAuth,
+  requireActiveSubscription,
   async (req, res) => {
     try {
       const updatedRestaurant =
@@ -1432,6 +1452,13 @@ app.get(
         })
       }
 
+      if (!hasOperationalSubscriptionAccess(restaurant)) {
+        return res.status(403).json({
+          error:
+            "⚠️ This restaurant is temporarily unavailable for online ordering."
+        })
+      }
+
       res.json({
         success: true,
         restaurant:
@@ -1457,8 +1484,28 @@ app.post(
   "/api/orders",
   async (req, res) => {
     try {
+      const payload = normalizeOrderPayload(req.body)
+      const restaurant =
+        await findRestaurantBySlug(payload.restaurantSlug)
+
+      if (!restaurant) {
+        return res.status(404).json({
+          error: "Restaurant not found."
+        })
+      }
+
+      if (!hasOperationalSubscriptionAccess(restaurant)) {
+        return res.status(403).json({
+          error:
+            "⚠️ This restaurant is temporarily unavailable for online ordering."
+        })
+      }
+
       const order =
-        await saveOrder(req.body)
+        await saveOrder({
+          ...req.body,
+          restaurantSlug: restaurant.slug
+        })
 
       res.json({
         success: true,
@@ -1482,12 +1529,11 @@ app.post(
 
 app.get(
   "/api/orders",
+  requireAuth,
+  requireActiveSubscription,
   async (req, res) => {
     try {
-      const restaurantSlug =
-        normalizeString(
-          req.query.restaurant
-        )
+      const restaurantSlug = req.restaurant.slug
 
       const orders =
         await getOrders(
@@ -1511,6 +1557,8 @@ app.get(
 
 app.patch(
   "/api/orders/:id/status",
+  requireAuth,
+  requireActiveSubscription,
   async (req, res) => {
     try {
       const status =
@@ -1518,11 +1566,7 @@ app.patch(
           req.body?.status
         ).toLowerCase()
 
-      const restaurantSlug =
-        normalizeString(
-          req.body?.restaurantSlug ||
-          req.query.restaurant
-        )
+      const restaurantSlug = req.restaurant.slug
 
       if (!status) {
         return res.status(400).json({
