@@ -103,6 +103,16 @@ function formatSubscriptionLabel(plan = "") {
   return plan || "active"
 }
 
+function formatSubscriptionDate(value) {
+  if (!value) return ""
+
+  return new Date(value).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  })
+}
+
 function RestaurantDashboard() {
   const navigate = useNavigate()
   const [restaurant, setRestaurant] = useState(null)
@@ -432,6 +442,51 @@ function RestaurantDashboard() {
       } else {
         setIsSaving(false)
       }
+    }
+  }
+
+  async function startFreeTrial() {
+    if (restaurant?.subscriptionStatus !== "trial_available") return
+
+    setSubscriptionLoading(true)
+    setFeedback({
+      type: "info",
+      message: "Starting your 30-day free trial..."
+    })
+
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/api/subscriptions/start-trial`,
+        {
+          method: "POST",
+          headers: getAuthHeaders()
+        }
+      )
+
+      const payload = await parseJsonResponse(
+        response,
+        "Server returned an invalid trial response.",
+        "Unable to start your free trial."
+      )
+
+      setRestaurant((current) => ({
+        ...current,
+        subscriptionStatus: payload.subscription.status,
+        subscriptionStartedAt: payload.subscription.startedAt,
+        subscriptionEndsAt: payload.subscription.endsAt
+      }))
+
+      setFeedback({
+        type: "success",
+        message: "Your 30-day free trial is now active. No payment was required."
+      })
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error.message || "Unable to start your free trial."
+      })
+    } finally {
+      setSubscriptionLoading(false)
     }
   }
 
@@ -1359,75 +1414,135 @@ function RestaurantDashboard() {
           <div className="dashboard-card-head">
             <div>
               <p className="dashboard-card-kicker">Step 4 · Subscription</p>
-              <h2>Choose Your Subscription</h2>
+              <h2>
+                {restaurant?.subscriptionStatus === "trial_available"
+                  ? "Start Your Free Trial"
+                  : restaurant?.subscriptionStatus === "trialing"
+                    ? "Your Free Trial"
+                    : restaurant?.subscriptionStatus === "grace"
+                      ? "Renew Your Subscription"
+                      : restaurant?.subscriptionStatus === "expired"
+                        ? "Subscription Expired"
+                        : "Your Subscription"}
+              </h2>
+
               <p className="dashboard-muted-copy">
-                Your 30-day free trial starts automatically. No payment is
-                required during the trial.
+                {restaurant?.subscriptionStatus === "trial_available"
+                  ? "Get full platform access for 30 days. No card or payment is required."
+                  : restaurant?.subscriptionStatus === "trialing"
+                    ? `Your free trial is active${formatSubscriptionDate(restaurant?.subscriptionEndsAt) ? ` until ${formatSubscriptionDate(restaurant.subscriptionEndsAt)}` : ""}.`
+                    : restaurant?.subscriptionStatus === "grace"
+                      ? "Your subscription period has ended. You are currently in the 3-day grace period. Renew now to keep full access."
+                      : restaurant?.subscriptionStatus === "expired"
+                        ? "Your subscription has expired. Your restaurant data is safe. Renew to restore operational access."
+                        : "Manage your restaurant subscription and billing."}
               </p>
             </div>
 
             <div className="dashboard-stat dashboard-subscription-status">
               <strong>
-                {restaurant?.subscriptionStatus === "trialing"
-                  ? "Trial active"
-                  : restaurant?.subscriptionStatus || "trialing"}
+                {restaurant?.subscriptionStatus === "trial_available"
+                  ? "Trial available"
+                  : restaurant?.subscriptionStatus === "trialing"
+                    ? "Trial active"
+                    : restaurant?.subscriptionStatus === "grace"
+                      ? "Grace period"
+                      : restaurant?.subscriptionStatus === "expired"
+                        ? "Expired"
+                        : restaurant?.subscriptionStatus === "active"
+                          ? "Active"
+                          : restaurant?.subscriptionStatus || "Unknown"}
               </strong>
+
               <span>
-                {restaurant?.subscriptionStatus === "trialing" &&
-                restaurant?.subscriptionEndsAt
-                  ? `Until ${new Date(
-                      restaurant.subscriptionEndsAt
-                    ).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric"
-                    })}`
-                  : "Current status"}
+                {restaurant?.subscriptionStatus === "trial_available"
+                  ? "30 days · no card required"
+                  : formatSubscriptionDate(restaurant?.subscriptionEndsAt)
+                    ? `Ends ${formatSubscriptionDate(restaurant.subscriptionEndsAt)}`
+                    : "Current status"}
               </span>
             </div>
           </div>
 
-          <div className="dashboard-grid dashboard-grid-top">
+          {restaurant?.subscriptionStatus === "trial_available" && (
             <div className="dashboard-usage-panel">
-              <strong>Monthly</strong>
-              <p>Full restaurant platform access for ₹999 per month.</p>
-              <button
-                type="button"
-                className="dashboard-secondary"
-                onClick={() => handleSubscribe("monthly")}
-                disabled={
-                  subscriptionLoading ||
-                  restaurant?.subscriptionStatus === "active"
-                }
-              >
-                {subscriptionLoading
-                  ? "Opening Razorpay..."
-                  : restaurant?.subscriptionStatus === "active"
-                    ? "Already Active"
-                    : "Subscribe ₹999 / month"}
-              </button>
-            </div>
+              <strong>30-Day Free Trial</strong>
+              <p>
+                Your trial starts exactly when you click the button below.
+                There is no payment during the trial.
+              </p>
 
-            <div className="dashboard-usage-panel">
-              <strong>Yearly</strong>
-              <p>Full restaurant platform access for ₹9,999 per year.</p>
               <button
                 type="button"
-                className="dashboard-secondary"
-                onClick={() => handleSubscribe("yearly")}
-                disabled={
-                  subscriptionLoading ||
-                  restaurant?.subscriptionStatus === "active"
-                }
+                className="portal-submit"
+                onClick={startFreeTrial}
+                disabled={subscriptionLoading}
               >
                 {subscriptionLoading
-                  ? "Opening Razorpay..."
-                  : restaurant?.subscriptionStatus === "active"
-                    ? "Already Active"
-                    : "Subscribe ₹9,999 / year"}
+                  ? "Starting trial..."
+                  : "Start 30-Day Free Trial"}
               </button>
             </div>
-          </div>
+          )}
+
+          {restaurant?.subscriptionStatus === "trialing" && (
+            <div className="dashboard-usage-panel">
+              <strong>Trial active</strong>
+              <p>
+                Full restaurant access is currently enabled. Your trial ends on{" "}
+                {formatSubscriptionDate(restaurant?.subscriptionEndsAt) || "the displayed date"}.
+              </p>
+            </div>
+          )}
+
+          {(restaurant?.subscriptionStatus === "grace" ||
+            restaurant?.subscriptionStatus === "expired") && (
+            <div className="dashboard-grid dashboard-grid-top">
+              <div className="dashboard-usage-panel">
+                <strong>Monthly</strong>
+                <p>Full restaurant platform access for ₹999 per month.</p>
+
+                <button
+                  type="button"
+                  className="dashboard-secondary"
+                  onClick={() => handleSubscribe("monthly")}
+                  disabled={subscriptionLoading}
+                >
+                  {subscriptionLoading
+                    ? "Opening Razorpay..."
+                    : "Renew ₹999 / month"}
+                </button>
+              </div>
+
+              <div className="dashboard-usage-panel">
+                <strong>Yearly</strong>
+                <p>Full restaurant platform access for ₹9,999 per year.</p>
+
+                <button
+                  type="button"
+                  className="dashboard-secondary"
+                  onClick={() => handleSubscribe("yearly")}
+                  disabled={subscriptionLoading}
+                >
+                  {subscriptionLoading
+                    ? "Opening Razorpay..."
+                    : "Renew ₹9,999 / year"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {restaurant?.subscriptionStatus === "active" && (
+            <div className="dashboard-usage-panel">
+              <strong>Subscription active</strong>
+              <p>
+                Your restaurant is fully operational.
+                {formatSubscriptionDate(restaurant?.subscriptionEndsAt)
+                  ? ` Current period ends ${formatSubscriptionDate(restaurant.subscriptionEndsAt)}.`
+                  : ""}
+              </p>
+            </div>
+          )}
         </article>
       </section>
     </div>
