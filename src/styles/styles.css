@@ -2478,3 +2478,96 @@ textarea {
 }
 
 
+
+
+/* Dashboard collapsible sections */
+
+.dashboard-subscription-card {
+  width: 100%;
+}
+
+.dashboard-collapsible-head {
+  align-items: flex-start;
+}
+
+.dashboard-collapse-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dashboard-collapse-button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #e5cda9;
+  border-radius: 12px;
+  background: #fffaf3;
+  color: #92400e;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.dashboard-collapse-button:hover {
+  background: #fff3df;
+  border-color: #d9ad72;
+  transform: translateY(-1px);
+}
+
+.dashboard-collapsible-body {
+  display: block;
+  margin-top: 18px;
+}
+
+.dashboard-collapsible-card.is-collapsed .dashboard-collapsible-body {
+  display: none;
+}
+
+.dashboard-collapsible-card.is-collapsed {
+  gap: 0;
+}
+
+.dashboard-collapsible-card.is-collapsed .dashboard-collapsible-head {
+  margin-bottom: 0;
+}
+
+.dashboard-subscription-status {
+  min-width: 145px;
+}
+
+.dashboard-subscription-status strong {
+  text-transform: none;
+}
+
+.dashboard-subscription-card .dashboard-grid-top {
+  margin-top: 2px;
+}
+
+.dashboard-subscription-card .dashboard-usage-panel {
+  min-height: 150px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-collapsible-head {
+    gap: 14px;
+  }
+
+  .dashboard-collapse-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-collapse-actions .dashboard-add-button,
+  .dashboard-collapse-actions .dashboard-collapse-button {
+    flex: 1 1 auto;
+  }
+
+  .dashboard-subscription-status {
+    min-width: 0;
+  }
+}

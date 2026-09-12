@@ -59,28 +59,31 @@ function getRestaurantId(req) {
     return null
   }
 
-  const payload = token.slice(0, separator)
+  const encodedPayload = token.slice(0, separator)
   const signature = token.slice(separator + 1)
 
-  const expected = crypto
-    .createHmac("sha256", process.env.SESSION_SECRET)
-    .update(payload)
-    .digest("base64url")
-
-  if (
-    signature.length !== expected.length ||
-    !crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expected)
-    )
-  ) {
-    return null
-  }
-
   try {
-    const decoded = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8")
-    )
+    const payload = Buffer.from(
+      encodedPayload,
+      "base64url"
+    ).toString("utf8")
+
+    const expected = crypto
+      .createHmac("sha256", process.env.SESSION_SECRET)
+      .update(payload)
+      .digest("base64url")
+
+    if (
+      signature.length !== expected.length ||
+      !crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expected)
+      )
+    ) {
+      return null
+    }
+
+    const decoded = JSON.parse(payload)
 
     if (
       !decoded.restaurantId ||

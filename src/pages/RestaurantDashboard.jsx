@@ -122,6 +122,7 @@ function RestaurantDashboard() {
   const [isSaving, setIsSaving] = useState(false)
   const [isUpdatingDetails, setIsUpdatingDetails] = useState(false)
   const [subscriptionLoading, setSubscriptionLoading] = useState(false)
+  const [expandedSection, setExpandedSection] = useState("details")
   const [copiedTarget, setCopiedTarget] = useState("")
   const [feedback, setFeedback] = useState({
     type: "info",
@@ -952,82 +953,34 @@ function RestaurantDashboard() {
         </article>
       </section>
 
-      <section className="dashboard-grid">
-        <article className="dashboard-card dashboard-card-wide">
-          <div className="dashboard-card-head">
-            <div>
-              <p className="dashboard-card-kicker">Subscription</p>
-              <h2>Choose Your Subscription</h2>
-              <p className="dashboard-muted-copy">
-                Your 30-day trial is included. Subscribe when you are ready to
-                continue using the restaurant platform.
-              </p>
-            </div>
-
-            <div className="dashboard-stat">
-              <strong>{restaurant?.subscriptionStatus || "trialing"}</strong>
-              <span>Current status</span>
-            </div>
-          </div>
-
-          <div className="dashboard-grid dashboard-grid-top">
-            <div className="dashboard-usage-panel">
-              <strong>Monthly</strong>
-              <p>Full restaurant platform access for ₹999 per month.</p>
-              <button
-                type="button"
-                className="dashboard-secondary"
-                onClick={() => handleSubscribe("monthly")}
-                disabled={
-                  subscriptionLoading ||
-                  restaurant?.subscriptionStatus === "active"
-                }
-              >
-                {subscriptionLoading
-                  ? "Opening Razorpay..."
-                  : restaurant?.subscriptionStatus === "active"
-                    ? "Already Active"
-                    : "Subscribe ₹999 / month"}
-              </button>
-            </div>
-
-            <div className="dashboard-usage-panel">
-              <strong>Yearly</strong>
-              <p>Full restaurant platform access for ₹9,999 per year.</p>
-              <button
-                type="button"
-                className="dashboard-secondary"
-                onClick={() => handleSubscribe("yearly")}
-                disabled={
-                  subscriptionLoading ||
-                  restaurant?.subscriptionStatus === "active"
-                }
-              >
-                {subscriptionLoading
-                  ? "Opening Razorpay..."
-                  : restaurant?.subscriptionStatus === "active"
-                    ? "Already Active"
-                    : "Subscribe ₹9,999 / year"}
-              </button>
-            </div>
-          </div>
-        </article>
-      </section>
-
       <section className="dashboard-grid dashboard-grid-mid">
-        <article className="dashboard-card dashboard-card-wide">
-          <div className="dashboard-card-head">
+        <article className={`dashboard-card dashboard-card-wide dashboard-collapsible-card ${expandedSection === "qr" ? "is-expanded" : "is-collapsed"}`}>
+          <div className="dashboard-card-head dashboard-collapsible-head">
             <div>
-              <p className="dashboard-card-kicker">QR Generator</p>
+              <p className="dashboard-card-kicker">Step 2 · Tables & QR</p>
               <h2>Printable Table QR Generator</h2>
               <p className="dashboard-muted-copy">
-                Generate local QR codes for your table count. Every card includes
-                the table number clearly so it is ready to print and place on the table.
+                Generate table-specific QR codes that send guests directly to the
+                correct restaurant menu.
               </p>
             </div>
+
+            <button
+              type="button"
+              className="dashboard-collapse-button"
+              onClick={() =>
+                setExpandedSection((current) =>
+                  current === "qr" ? "" : "qr"
+                )
+              }
+              aria-expanded={expandedSection === "qr"}
+            >
+              {expandedSection === "qr" ? "Collapse" : "Expand"}
+            </button>
           </div>
 
-          <div className="dashboard-qr-layout">
+          <div className="dashboard-collapsible-body">
+            <div className="dashboard-qr-layout">
             <div className="dashboard-qr-panel">
               <div className="dashboard-qr-controls">
                 <label>
@@ -1172,31 +1125,48 @@ function RestaurantDashboard() {
                 </button>
               </article>
             ))}
+            </div>
           </div>
         </article>
       </section>
 
-      <section className="dashboard-card dashboard-card-wide">
-        <div className="dashboard-section-head">
+      <section className={`dashboard-card dashboard-card-wide dashboard-collapsible-card ${expandedSection === "menu" ? "is-expanded" : "is-collapsed"}`}>
+        <div className="dashboard-section-head dashboard-collapsible-head">
           <div>
-            <p className="dashboard-card-kicker">Menu Control</p>
+            <p className="dashboard-card-kicker">Step 3 · Menu</p>
             <h2>Menu Editor</h2>
             <p className="dashboard-muted-copy">
-              Add dishes, upload item images, search quickly, and control what
-              shows on the public menu.
+              Add dishes, prices, images, ingredients, and control what appears
+              on your public menu.
             </p>
           </div>
 
-          <button
-            type="button"
-            className="dashboard-add-button"
-            onClick={addMenuItem}
-          >
-            + Add Menu Item
-          </button>
+          <div className="dashboard-collapse-actions">
+            <button
+              type="button"
+              className="dashboard-add-button"
+              onClick={addMenuItem}
+            >
+              + Add Menu Item
+            </button>
+
+            <button
+              type="button"
+              className="dashboard-collapse-button"
+              onClick={() =>
+                setExpandedSection((current) =>
+                  current === "menu" ? "" : "menu"
+                )
+              }
+              aria-expanded={expandedSection === "menu"}
+            >
+              {expandedSection === "menu" ? "Collapse" : "Expand"}
+            </button>
+          </div>
         </div>
 
-        <div className="dashboard-toolbar">
+        <div className="dashboard-collapsible-body">
+          <div className="dashboard-toolbar">
           <label>
             <span>Search</span>
             <input
@@ -1381,6 +1351,84 @@ function RestaurantDashboard() {
             {isSaving ? "Saving..." : "Save Restaurant & Menu"}
           </button>
         </div>
+          </div>
+      </section>
+
+      <section className="dashboard-grid">
+        <article className="dashboard-card dashboard-card-wide dashboard-subscription-card">
+          <div className="dashboard-card-head">
+            <div>
+              <p className="dashboard-card-kicker">Step 4 · Subscription</p>
+              <h2>Choose Your Subscription</h2>
+              <p className="dashboard-muted-copy">
+                Your 30-day free trial starts automatically. No payment is
+                required during the trial.
+              </p>
+            </div>
+
+            <div className="dashboard-stat dashboard-subscription-status">
+              <strong>
+                {restaurant?.subscriptionStatus === "trialing"
+                  ? "Trial active"
+                  : restaurant?.subscriptionStatus || "trialing"}
+              </strong>
+              <span>
+                {restaurant?.subscriptionStatus === "trialing" &&
+                restaurant?.subscriptionEndsAt
+                  ? `Until ${new Date(
+                      restaurant.subscriptionEndsAt
+                    ).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric"
+                    })}`
+                  : "Current status"}
+              </span>
+            </div>
+          </div>
+
+          <div className="dashboard-grid dashboard-grid-top">
+            <div className="dashboard-usage-panel">
+              <strong>Monthly</strong>
+              <p>Full restaurant platform access for ₹999 per month.</p>
+              <button
+                type="button"
+                className="dashboard-secondary"
+                onClick={() => handleSubscribe("monthly")}
+                disabled={
+                  subscriptionLoading ||
+                  restaurant?.subscriptionStatus === "active"
+                }
+              >
+                {subscriptionLoading
+                  ? "Opening Razorpay..."
+                  : restaurant?.subscriptionStatus === "active"
+                    ? "Already Active"
+                    : "Subscribe ₹999 / month"}
+              </button>
+            </div>
+
+            <div className="dashboard-usage-panel">
+              <strong>Yearly</strong>
+              <p>Full restaurant platform access for ₹9,999 per year.</p>
+              <button
+                type="button"
+                className="dashboard-secondary"
+                onClick={() => handleSubscribe("yearly")}
+                disabled={
+                  subscriptionLoading ||
+                  restaurant?.subscriptionStatus === "active"
+                }
+              >
+                {subscriptionLoading
+                  ? "Opening Razorpay..."
+                  : restaurant?.subscriptionStatus === "active"
+                    ? "Already Active"
+                    : "Subscribe ₹9,999 / year"}
+              </button>
+            </div>
+          </div>
+        </article>
       </section>
     </div>
   )
