@@ -1579,6 +1579,8 @@ app.use(
 
 app.use(
   (req, res) => {
+app.use("/api/subscriptions", require("./subscriptionRoutes"))
+
     res.status(404).json({
       error:
         "Route not found."

@@ -11,7 +11,7 @@ const subscriptionPlans = [
   {
     id: "monthly",
     name: "Simple Monthly",
-    price: "INR 2,199 / month",
+    price: "INR 999 / month",
     description:
       "A clean monthly plan for restaurants that want QR menus, owner login, and live menu control.",
     badge: "Flexible billing"
@@ -19,7 +19,7 @@ const subscriptionPlans = [
   {
     id: "yearly",
     name: "Simple Yearly",
-    price: "INR 18,999 /yearly",
+    price: "INR 9,999 / year",
     description:
       "The same product with an annual billing cycle for restaurants that want a long-term setup.",
     badge: "Best value"

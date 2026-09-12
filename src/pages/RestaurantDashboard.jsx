@@ -121,6 +121,7 @@ function RestaurantDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isUpdatingDetails, setIsUpdatingDetails] = useState(false)
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false)
   const [copiedTarget, setCopiedTarget] = useState("")
   const [feedback, setFeedback] = useState({
     type: "info",
@@ -430,6 +431,135 @@ function RestaurantDashboard() {
       } else {
         setIsSaving(false)
       }
+    }
+  }
+
+  async function loadRazorpayCheckout() {
+    if (window.Razorpay) {
+      return
+    }
+
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script")
+      script.src = "https://checkout.razorpay.com/v1/checkout.js"
+      script.onload = resolve
+      script.onerror = () => reject(new Error("Unable to load Razorpay Checkout."))
+      document.body.appendChild(script)
+    })
+  }
+
+  async function handleSubscribe(plan) {
+    if (restaurant?.subscriptionStatus === "active") {
+      setFeedback({
+        type: "warning",
+        message: "Your restaurant already has an active subscription."
+      })
+      return
+    }
+
+    setSubscriptionLoading(true)
+    setFeedback({
+      type: "info",
+      message: "Preparing your Razorpay subscription..."
+    })
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/subscriptions/create`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ plan })
+      })
+
+      const payload = await parseJsonResponse(
+        response,
+        "Server returned an invalid subscription response.",
+        "Unable to create your subscription."
+      )
+
+      await loadRazorpayCheckout()
+
+      const checkout = new window.Razorpay({
+        key: payload.keyId,
+        subscription_id: payload.subscriptionId,
+        name: payload.restaurant.name,
+        description: payload.label,
+        prefill: {
+          name: payload.restaurant.ownerName || "",
+          email: payload.restaurant.email || ""
+        },
+        notes: {
+          restaurant_id: String(restaurant?.id || ""),
+          billing_plan: plan
+        },
+        theme: {
+          color: "#111827"
+        },
+        handler: async (paymentResponse) => {
+          try {
+            setFeedback({
+              type: "info",
+              message: "Payment received. Confirming your subscription..."
+            })
+
+            const verifyResponse = await fetch(
+              `${apiBaseUrl}/api/subscriptions/verify`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...getAuthHeaders()
+                },
+                body: JSON.stringify(paymentResponse)
+              }
+            )
+
+            const verifyPayload = await parseJsonResponse(
+              verifyResponse,
+              "Server returned an invalid verification response.",
+              "Unable to verify your subscription payment."
+            )
+
+            await loadRestaurant()
+
+            setFeedback({
+              type: "success",
+              message:
+                verifyPayload.success
+                  ? "Subscription activated successfully."
+                  : "Payment completed. Please refresh the dashboard to confirm your subscription."
+            })
+          } catch (error) {
+            setFeedback({
+              type: "error",
+              message:
+                error.message ||
+                "Payment was received, but subscription verification failed."
+            })
+          } finally {
+            setSubscriptionLoading(false)
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setSubscriptionLoading(false)
+            setFeedback({
+              type: "warning",
+              message: "Subscription checkout was closed."
+            })
+          }
+        }
+      })
+
+      checkout.open()
+    } catch (error) {
+      setSubscriptionLoading(false)
+      setFeedback({
+        type: "error",
+        message: error.message || "Unable to start subscription checkout."
+      })
     }
   }
 
@@ -818,6 +948,68 @@ function RestaurantDashboard() {
               an order, and the backend routes that order to the same
               restaurant's kitchen board.
             </p>
+          </div>
+        </article>
+      </section>
+
+      <section className="dashboard-grid">
+        <article className="dashboard-card dashboard-card-wide">
+          <div className="dashboard-card-head">
+            <div>
+              <p className="dashboard-card-kicker">Subscription</p>
+              <h2>Choose Your Subscription</h2>
+              <p className="dashboard-muted-copy">
+                Your 30-day trial is included. Subscribe when you are ready to
+                continue using the restaurant platform.
+              </p>
+            </div>
+
+            <div className="dashboard-stat">
+              <strong>{restaurant?.subscriptionStatus || "trialing"}</strong>
+              <span>Current status</span>
+            </div>
+          </div>
+
+          <div className="dashboard-grid dashboard-grid-top">
+            <div className="dashboard-usage-panel">
+              <strong>Monthly</strong>
+              <p>Full restaurant platform access for ₹999 per month.</p>
+              <button
+                type="button"
+                className="dashboard-secondary"
+                onClick={() => handleSubscribe("monthly")}
+                disabled={
+                  subscriptionLoading ||
+                  restaurant?.subscriptionStatus === "active"
+                }
+              >
+                {subscriptionLoading
+                  ? "Opening Razorpay..."
+                  : restaurant?.subscriptionStatus === "active"
+                    ? "Already Active"
+                    : "Subscribe ₹999 / month"}
+              </button>
+            </div>
+
+            <div className="dashboard-usage-panel">
+              <strong>Yearly</strong>
+              <p>Full restaurant platform access for ₹9,999 per year.</p>
+              <button
+                type="button"
+                className="dashboard-secondary"
+                onClick={() => handleSubscribe("yearly")}
+                disabled={
+                  subscriptionLoading ||
+                  restaurant?.subscriptionStatus === "active"
+                }
+              >
+                {subscriptionLoading
+                  ? "Opening Razorpay..."
+                  : restaurant?.subscriptionStatus === "active"
+                    ? "Already Active"
+                    : "Subscribe ₹9,999 / year"}
+              </button>
+            </div>
           </div>
         </article>
       </section>
