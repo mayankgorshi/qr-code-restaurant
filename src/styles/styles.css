@@ -2906,30 +2906,19 @@ textarea {
   }
 }
 
-/* Final desktop dashboard layout */
+
+/* Desktop dashboard layout */
 @media (min-width: 921px) {
   .dashboard-shell {
-    width: min(1440px, calc(100% - 48px)) !important;
-    max-width: 1440px !important;
-    margin: 0 auto !important;
+    width: calc(100% - 48px);
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
-  .dashboard-grid,
-  .dashboard-grid-top {
-    width: 100%;
-  }
-
-  .dashboard-grid-top {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .dashboard-card-wide {
-    grid-column: 1 / -1 !important;
-    width: 100%;
-  }
-
-  .dashboard-subscription-card {
-    grid-column: 1 / -1 !important;
+  .dashboard-grid-mid > .dashboard-card-wide,
+  .dashboard-grid > .dashboard-subscription-card {
+    grid-column: 1 / -1;
     width: 100%;
   }
 }
