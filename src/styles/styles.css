@@ -2571,3 +2571,365 @@ textarea {
     min-width: 0;
   }
 }
+
+
+/* Payment choice UI + laptop dashboard polish */
+
+.payment-choice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: paymentChoiceFade 0.18s ease-out;
+}
+
+.payment-choice-sheet {
+  width: min(440px, 100%);
+  max-height: min(720px, calc(100vh - 32px));
+  overflow-y: auto;
+  padding: 26px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+  animation: paymentChoiceIn 0.22s ease-out;
+}
+
+.payment-choice-handle {
+  display: none;
+}
+
+.payment-choice-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.payment-choice-eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #9a3412;
+}
+
+.payment-choice-header h3 {
+  margin: 0;
+  font-size: 23px;
+  line-height: 1.15;
+  color: #111827;
+}
+
+.payment-choice-header p {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.payment-choice-close {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.payment-choice-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 22px 0 14px;
+  padding: 14px 16px;
+  border-radius: 15px;
+  background: #fff7ed;
+}
+
+.payment-choice-total span {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.payment-choice-total strong {
+  font-size: 19px;
+  color: #111827;
+}
+
+.payment-method-list {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-method-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 16px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease,
+    background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.payment-method-option:hover {
+  transform: translateY(-1px);
+  border-color: #fdba74;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+}
+
+.payment-method-option.selected {
+  border-color: #f97316;
+  background: #fff7ed;
+  box-shadow: 0 8px 22px rgba(249, 115, 22, 0.09);
+}
+
+.payment-method-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  border-radius: 13px;
+  background: #f3f4f6;
+  color: #111827;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.payment-method-option.selected .payment-method-icon {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.payment-method-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.payment-method-copy strong {
+  font-size: 14px;
+  color: #111827;
+}
+
+.payment-method-copy small {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.payment-method-radio {
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 23px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.payment-method-option.selected .payment-method-radio {
+  border-color: #f97316;
+  background: #f97316;
+}
+
+.payment-choice-continue {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+  min-height: 50px;
+  border: 0;
+  border-radius: 14px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.payment-choice-continue:hover {
+  transform: translateY(-1px);
+  opacity: 0.94;
+}
+
+.payment-choice-continue span {
+  font-size: 18px;
+}
+
+.payment-choice-cancel {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@keyframes paymentChoiceFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes paymentChoiceIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Better use of laptop/desktop width without disturbing the mobile layout. */
+@media (min-width: 921px) and (max-width: 1440px) {
+  .dashboard-shell {
+    width: min(1180px, calc(100% - 40px));
+    margin: 0 auto;
+  }
+
+  .dashboard-topbar {
+    gap: 18px;
+  }
+
+  .dashboard-grid {
+    gap: 18px;
+  }
+
+  .dashboard-card {
+    min-width: 0;
+  }
+
+  .dashboard-grid-top {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-card-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 921px) {
+  .dashboard-card,
+  .dashboard-subscription-card {
+    border-radius: 20px;
+  }
+
+  .dashboard-grid {
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .payment-choice-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .payment-choice-sheet {
+    width: 100%;
+    max-height: 92vh;
+    padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -18px 55px rgba(15, 23, 42, 0.2);
+    animation: paymentChoiceMobileIn 0.22s ease-out;
+  }
+
+  .payment-choice-handle {
+    display: block;
+    width: 42px;
+    height: 4px;
+    margin: 2px auto 18px;
+    border-radius: 999px;
+    background: #d1d5db;
+  }
+
+  .payment-choice-header h3 {
+    font-size: 21px;
+  }
+
+  .payment-choice-header p {
+    font-size: 12px;
+  }
+
+  .payment-choice-total {
+    margin-top: 18px;
+  }
+
+  .payment-method-option {
+    min-height: 66px;
+    padding: 12px;
+  }
+
+  .payment-choice-continue {
+    min-height: 52px;
+    margin-top: 16px;
+  }
+}
+
+@keyframes paymentChoiceMobileIn {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Final desktop dashboard layout */
+@media (min-width: 921px) {
+  .dashboard-shell {
+    width: min(1440px, calc(100% - 48px)) !important;
+    max-width: 1440px !important;
+    margin: 0 auto !important;
+  }
+
+  .dashboard-grid,
+  .dashboard-grid-top {
+    width: 100%;
+  }
+
+  .dashboard-grid-top {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .dashboard-card-wide {
+    grid-column: 1 / -1 !important;
+    width: 100%;
+  }
+
+  .dashboard-subscription-card {
+    grid-column: 1 / -1 !important;
+    width: 100%;
+  }
+}

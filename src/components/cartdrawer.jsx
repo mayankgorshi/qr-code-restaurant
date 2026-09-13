@@ -25,6 +25,8 @@ function CartDrawer({
     type: "info",
     message: ""
   })
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("pay-now")
   const [placedOrder, setPlacedOrder] = useState(null)
   const demoPaymentsEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_PAYMENT === "true"
   const navigate = useNavigate()
@@ -141,7 +143,7 @@ function CartDrawer({
       message
     )
 
-  async function placeOrder() {
+  async function processPlaceOrder() {
     if (cart.length === 0 || total <= 0) {
       setPaymentState({
         type: "warning",
@@ -251,6 +253,22 @@ function CartDrawer({
     }
   }
 
+  function placeOrder() {
+    if (cart.length === 0 || total <= 0 || isProcessing) {
+      return
+    }
+
+    setShowPaymentOptions(true)
+  }
+
+  function continueWithPaymentChoice() {
+    setShowPaymentOptions(false)
+
+    // UI-only for now.
+    // The selected method will be connected to the real payment flow later.
+    processPlaceOrder()
+  }
+
   const updateQuantity = (itemKey, change) => {
     setCart((currentCart) =>
       currentCart
@@ -270,7 +288,117 @@ function CartDrawer({
   }
 
   return (
-    <div className="cart-drawer-overlay" onClick={closeCart}>
+    <>
+      {showPaymentOptions && (
+        <div
+          className="payment-choice-overlay"
+          onClick={() => setShowPaymentOptions(false)}
+        >
+          <section
+            className="payment-choice-sheet"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="payment-choice-title"
+          >
+            <div className="payment-choice-handle" />
+
+            <div className="payment-choice-header">
+              <div>
+                <span className="payment-choice-eyebrow">ORDER PAYMENT</span>
+                <h3 id="payment-choice-title">How would you like to pay?</h3>
+                <p>Choose a payment method for this order.</p>
+              </div>
+
+              <button
+                type="button"
+                className="payment-choice-close"
+                onClick={() => setShowPaymentOptions(false)}
+                aria-label="Close payment options"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="payment-choice-total">
+              <span>Total to pay</span>
+              <strong>Rs. {total}</strong>
+            </div>
+
+            <div className="payment-method-list">
+              <button
+                type="button"
+                className={`payment-method-option ${
+                  selectedPaymentMethod === "cod" ? "selected" : ""
+                }`}
+                onClick={() => setSelectedPaymentMethod("cod")}
+              >
+                <span className="payment-method-icon">₹</span>
+                <span className="payment-method-copy">
+                  <strong>Cash on Delivery</strong>
+                  <small>Pay at the restaurant</small>
+                </span>
+                <span className="payment-method-radio">
+                  {selectedPaymentMethod === "cod" ? "✓" : ""}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`payment-method-option ${
+                  selectedPaymentMethod === "pay-now" ? "selected" : ""
+                }`}
+                onClick={() => setSelectedPaymentMethod("pay-now")}
+              >
+                <span className="payment-method-icon">▣</span>
+                <span className="payment-method-copy">
+                  <strong>Pay Now</strong>
+                  <small>Pay securely online</small>
+                </span>
+                <span className="payment-method-radio">
+                  {selectedPaymentMethod === "pay-now" ? "✓" : ""}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`payment-method-option ${
+                  selectedPaymentMethod === "pay-later" ? "selected" : ""
+                }`}
+                onClick={() => setSelectedPaymentMethod("pay-later")}
+              >
+                <span className="payment-method-icon">◷</span>
+                <span className="payment-method-copy">
+                  <strong>Pay Later</strong>
+                  <small>Order first, pay later</small>
+                </span>
+                <span className="payment-method-radio">
+                  {selectedPaymentMethod === "pay-later" ? "✓" : ""}
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="payment-choice-continue"
+              onClick={continueWithPaymentChoice}
+            >
+              Continue
+              <span>→</span>
+            </button>
+
+            <button
+              type="button"
+              className="payment-choice-cancel"
+              onClick={() => setShowPaymentOptions(false)}
+            >
+              Cancel
+            </button>
+          </section>
+        </div>
+      )}
+
+      <div className="cart-drawer-overlay" onClick={closeCart}>
       <section className="cart-drawer" onClick={(event) => event.stopPropagation()}>
         <div className="cart-drawer-handle" />
 
@@ -421,6 +549,7 @@ function CartDrawer({
         </div>
       </section>
     </div>
+    </>
   )
 }
 
