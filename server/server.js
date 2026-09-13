@@ -51,7 +51,14 @@ const paymentRateLimiter = rateLimit({
 
 const app = express()
 
-app.use(express.json())
+app.use(
+  express.json({
+    verify: (req, res, buffer) => {
+      req.rawBody = buffer
+    }
+  })
+)
+
 app.use(
   cors({
     origin:

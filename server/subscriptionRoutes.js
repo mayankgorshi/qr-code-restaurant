@@ -158,6 +158,158 @@ function serializeSubscription(subscription) {
   }
 }
 
+router.post("/webhook", async (req, res) => {
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET
+  const signature = req.get("x-razorpay-signature") || ""
+
+  if (!webhookSecret || !signature || !req.rawBody) {
+    return res.status(400).json({
+      error: "Invalid Razorpay webhook configuration."
+    })
+  }
+
+  const expected = crypto
+    .createHmac("sha256", webhookSecret)
+    .update(req.rawBody)
+    .digest("hex")
+
+  if (
+    expected.length !== signature.length ||
+    !crypto.timingSafeEqual(
+      Buffer.from(expected),
+      Buffer.from(signature)
+    )
+  ) {
+    return res.status(400).json({
+      error: "Invalid Razorpay webhook signature."
+    })
+  }
+
+  const event = req.body?.event || ""
+  const subscription =
+    req.body?.payload?.subscription?.entity
+
+  if (!subscription?.id) {
+    return res.status(200).json({
+      received: true
+    })
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, subscription_plan, subscription_status
+       FROM restaurants
+       WHERE razorpay_subscription_id = $1
+       LIMIT 1`,
+      [subscription.id]
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(200).json({
+        received: true
+      })
+    }
+
+    const restaurant = result.rows[0]
+
+    const currentStart = unixToDate(
+      subscription.current_start
+    )
+
+    const currentEnd = unixToDate(
+      subscription.current_end
+    )
+
+    const now = new Date()
+
+    if (
+      [
+        "subscription.authenticated",
+        "subscription.activated",
+        "subscription.charged",
+        "subscription.resumed"
+      ].includes(event)
+    ) {
+      await pool.query(
+        `UPDATE restaurants
+         SET subscription_status = 'active',
+             subscription_started_at = COALESCE($1, subscription_started_at),
+             subscription_ends_at = COALESCE($2, subscription_ends_at),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [
+          currentStart,
+          currentEnd,
+          restaurant.id
+        ]
+      )
+    } else if (
+      [
+        "subscription.pending",
+        "subscription.halted",
+        "subscription.paused",
+        "subscription.cancelled",
+        "subscription.completed"
+      ].includes(event)
+    ) {
+      if (currentEnd && currentEnd > now) {
+        await pool.query(
+          `UPDATE restaurants
+           SET subscription_status = 'active',
+               subscription_started_at = COALESCE($1, subscription_started_at),
+               subscription_ends_at = $2,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $3`,
+          [
+            currentStart,
+            currentEnd,
+            restaurant.id
+          ]
+        )
+      } else {
+        const graceEndsAt = currentEnd
+          ? new Date(
+              currentEnd.getTime() +
+              3 * 24 * 60 * 60 * 1000
+            )
+          : now
+
+        await pool.query(
+          `UPDATE restaurants
+           SET subscription_status = $1,
+               subscription_started_at = COALESCE($2, subscription_started_at),
+               subscription_ends_at = COALESCE($3, subscription_ends_at),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $4`,
+          [
+            now < graceEndsAt ? "grace" : "expired",
+            currentStart,
+            currentEnd,
+            restaurant.id
+          ]
+        )
+      }
+    }
+
+    console.log(
+      `Razorpay webhook processed: ${event} for subscription ${subscription.id}`
+    )
+
+    return res.status(200).json({
+      received: true
+    })
+  } catch (error) {
+    console.error(
+      "Razorpay webhook processing failed:",
+      error
+    )
+
+    return res.status(500).json({
+      error: "Webhook processing failed."
+    })
+  }
+})
+
 router.get("/status", requireRestaurant, async (req, res) => {
   const row = req.restaurant
 
