@@ -143,7 +143,7 @@ function CartDrawer({
       message
     )
 
-  async function processPlaceOrder() {
+  async function processPlaceOrder({ skipPayment = false } = {}) {
     if (cart.length === 0 || total <= 0) {
       setPaymentState({
         type: "warning",
@@ -163,6 +163,11 @@ function CartDrawer({
     try {
       restaurantOrder = await ensureRestaurantOrder()
       const orderLabel = getOrderLabel(restaurantOrder)
+
+      if (skipPayment) {
+        finishPayment(`${orderLabel} placed successfully.`)
+        return
+      }
 
       if (!window.Razorpay) {
         if (demoPaymentsEnabled) {
@@ -264,9 +269,12 @@ function CartDrawer({
   function continueWithPaymentChoice() {
     setShowPaymentOptions(false)
 
-    // UI-only for now.
-    // The selected method will be connected to the real payment flow later.
-    processPlaceOrder()
+    if (selectedPaymentMethod === "pay-now") {
+      processPlaceOrder()
+      return
+    }
+
+    processPlaceOrder({ skipPayment: true })
   }
 
   const updateQuantity = (itemKey, change) => {
