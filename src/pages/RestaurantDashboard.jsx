@@ -1495,7 +1495,8 @@ function RestaurantDashboard() {
             </div>
           )}
 
-          {(restaurant?.subscriptionStatus === "grace" ||
+          {(restaurant?.subscriptionStatus === "trialing" ||
+            restaurant?.subscriptionStatus === "grace" ||
             restaurant?.subscriptionStatus === "expired") && (
             <div className="dashboard-grid dashboard-grid-top">
               <div className="dashboard-usage-panel">
@@ -1510,7 +1511,9 @@ function RestaurantDashboard() {
                 >
                   {subscriptionLoading
                     ? "Opening Razorpay..."
-                    : "Renew ₹999 / month"}
+                    : restaurant?.subscriptionStatus === "trialing"
+                      ? "Subscribe ₹999 / month"
+                      : "Renew ₹999 / month"}
                 </button>
               </div>
 
@@ -1526,7 +1529,9 @@ function RestaurantDashboard() {
                 >
                   {subscriptionLoading
                     ? "Opening Razorpay..."
-                    : "Renew ₹9,999 / year"}
+                    : restaurant?.subscriptionStatus === "trialing"
+                      ? "Subscribe ₹9,999 / year"
+                      : "Renew ₹9,999 / year"}
                 </button>
               </div>
             </div>
