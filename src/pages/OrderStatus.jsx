@@ -73,7 +73,7 @@ function OrderStatus() {
 
     try {
       const response = await fetch(
-        `${apiBaseUrl}/api/orders?restaurant=${restaurantSlug}`
+        `${apiBaseUrl}/api/orders/status?restaurant=${restaurantSlug}&table=${tableNumber}`
       )
 
       if (!response.ok) {

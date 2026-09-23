@@ -51,14 +51,7 @@ const paymentRateLimiter = rateLimit({
 
 const app = express()
 
-app.use(
-  express.json({
-    verify: (req, res, buffer) => {
-      req.rawBody = buffer
-    }
-  })
-)
-
+app.use(express.json())
 app.use(
   cors({
     origin:
@@ -81,6 +74,27 @@ const razorpay =
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : ""
+}
+
+function normalizeMobileNumber(value) {
+  const mobile = normalizeString(value)
+    .replace(/[\s()-]/g, "")
+
+  if (!mobile) {
+    return ""
+  }
+
+  if (/^\+91\d{10}$/.test(mobile)) {
+    return mobile
+  }
+
+  if (/^\d{10}$/.test(mobile)) {
+    return `+91${mobile}`
+  }
+
+  throw new Error(
+    "Enter a valid 10-digit mobile number."
+  )
 }
 
 function normalizeStringList(value) {
@@ -207,13 +221,12 @@ function sanitizeRestaurantForAuth(restaurant = {}) {
     restaurantName: restaurant.restaurantName,
     ownerName: restaurant.ownerName,
     email: restaurant.email,
+    mobileNumber: restaurant.mobileNumber,
     slug: restaurant.slug,
     logo: restaurant.logo,
     publicDescription: restaurant.publicDescription,
     subscriptionPlan,
     subscriptionStatus: restaurant.subscriptionStatus,
-    subscriptionStartedAt: restaurant.subscriptionStartedAt || null,
-    subscriptionEndsAt: restaurant.subscriptionEndsAt || null,
     publicMenuUrl: `/?restaurant=${restaurant.slug}`,
     kitchenUrl: `/kitchen?restaurant=${restaurant.slug}`,
     menu: Array.isArray(restaurant.menu)
@@ -342,6 +355,7 @@ async function buildRestaurantFromRow(row) {
     restaurantName: row.restaurant_name,
     ownerName: row.owner_name || "",
     email: row.email,
+    mobileNumber: row.mobile_number || "",
     slug: row.slug,
     passwordHash: row.password_hash,
     logo: row.logo || "",
@@ -480,15 +494,18 @@ async function seedDefaultMenuForRestaurant(
   }
 }
 
+
 async function ensureDefaultRestaurant() {
-  const existing = await findRestaurantBySlug(
+  const defaultEmail = "demo@foodie.local"
+
+  const existingBySlug = await findRestaurantBySlug(
     DEFAULT_RESTAURANT_SLUG
   )
 
-  if (existing) {
-    if (existing.menu.length === 0) {
+  if (existingBySlug) {
+    if (existingBySlug.menu.length === 0) {
       await seedDefaultMenuForRestaurant(
-        existing._id
+        existingBySlug._id
       )
 
       return findRestaurantBySlug(
@@ -496,13 +513,29 @@ async function ensureDefaultRestaurant() {
       )
     }
 
-    return existing
+    return existingBySlug
+  }
+
+  const existingByEmail = await findRestaurantByEmail(
+    defaultEmail
+  )
+
+  if (existingByEmail) {
+    if (existingByEmail.menu.length === 0) {
+      await seedDefaultMenuForRestaurant(
+        existingByEmail._id
+      )
+
+      return findRestaurantByEmail(defaultEmail)
+    }
+
+    return existingByEmail
   }
 
   const defaultRestaurantPayload = {
     restaurantName: "Foodie Demo",
     ownerName: "Demo Owner",
-    email: "demo@foodie.local",
+    email: defaultEmail,
     password: "demo123",
     logo: "",
     publicDescription:
@@ -637,9 +670,9 @@ async function registerRestaurant(payload = {}) {
      subscription_ends_at
    )
    VALUES (
-     $1,$2,$3,$4,$5,$6,$7,$8,'trial_available',
-     NULL,
-     NULL
+     $1,$2,$3,$4,$5,$6,$7,$8,'trialing',
+     CURRENT_TIMESTAMP,
+     CURRENT_TIMESTAMP + INTERVAL '30 days'
    )
    RETURNING *`,
       [
@@ -755,6 +788,91 @@ async function updateRestaurantForSession(
   } finally {
     client.release()
   }
+}
+async function updateOwnerAccountForSession(
+  restaurantId,
+  payload = {}
+) {
+  const ownerName =
+    normalizeString(payload.ownerName)
+
+  const email =
+    normalizeString(payload.email).toLowerCase()
+
+  const mobileNumber =
+    normalizeMobileNumber(
+      payload.mobileNumber
+    )
+
+  if (!ownerName) {
+    throw new Error(
+      "Owner name is required."
+    )
+  }
+
+  if (!email) {
+    throw new Error(
+      "Email is required."
+    )
+  }
+
+  if (
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new Error(
+      "Enter a valid email address."
+    )
+  }
+
+  if (!mobileNumber) {
+    throw new Error(
+      "Mobile number is required."
+    )
+  }
+
+  const existingEmailResult =
+    await pool.query(
+      `SELECT id
+       FROM restaurants
+       WHERE email = $1
+         AND id <> $2
+       LIMIT 1`,
+      [
+        email,
+        restaurantId
+      ]
+    )
+
+  if (existingEmailResult.rows.length > 0) {
+    throw new Error(
+      "An account with this email already exists."
+    )
+  }
+
+  const result =
+    await pool.query(
+      `UPDATE restaurants
+       SET owner_name = $1,
+           email = $2,
+           mobile_number = $3,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [
+        ownerName,
+        email,
+        mobileNumber,
+        restaurantId
+      ]
+    )
+
+  if (result.rows.length === 0) {
+    return null
+  }
+
+  return buildRestaurantFromRow(
+    result.rows[0]
+  )
 }
 
 function createSession(restaurant) {
@@ -879,6 +997,29 @@ async function requireAuth(
       })
     }
 
+    const subscriptionEndsAt =
+      restaurant.subscriptionEndsAt
+        ? new Date(restaurant.subscriptionEndsAt)
+        : null
+
+    if (
+      restaurant.subscriptionStatus !== "active" &&
+      restaurant.subscriptionStatus !== "trialing"
+    ) {
+      return res.status(403).json({
+        error: "Your subscription is not active."
+      })
+    }
+
+    if (
+      subscriptionEndsAt &&
+      subscriptionEndsAt <= new Date()
+    ) {
+      return res.status(403).json({
+        error: "Your trial or subscription has expired."
+      })
+    }
+
     req.restaurant = restaurant
     req.sessionToken = token
 
@@ -893,46 +1034,6 @@ async function requireAuth(
       error: "Authentication failed."
     })
   }
-}
-
-function hasOperationalSubscriptionAccess(restaurant) {
-  if (!restaurant || !restaurant.subscriptionEndsAt) return false
-
-  const endsAt = new Date(restaurant.subscriptionEndsAt)
-  const now = new Date()
-
-  if (
-    (restaurant.subscriptionStatus === "active" ||
-      restaurant.subscriptionStatus === "trialing") &&
-    endsAt > now
-  ) {
-    return true
-  }
-
-  if (
-    ["active", "trialing", "grace"].includes(
-      restaurant.subscriptionStatus
-    )
-  ) {
-    const graceEndsAt = new Date(
-      endsAt.getTime() + 3 * 24 * 60 * 60 * 1000
-    )
-
-    return now < graceEndsAt
-  }
-
-  return false
-}
-
-function requireActiveSubscription(req, res, next) {
-  if (hasOperationalSubscriptionAccess(req.restaurant)) {
-    return next()
-  }
-
-  return res.status(403).json({
-    error:
-      "Your subscription is not active. Please renew to continue."
-  })
 }
 
 async function saveOrder(payload) {
@@ -1207,6 +1308,11 @@ async function initializePersistence() {
 
   console.log("PostgreSQL Connected")
 
+  await pool.query(`
+    ALTER TABLE restaurants
+    ADD COLUMN IF NOT EXISTS mobile_number VARCHAR(20)
+  `)
+
   if (process.env.NODE_ENV !== "production") {
     await ensureDefaultRestaurant()
   }
@@ -1394,7 +1500,6 @@ app.get(
 app.put(
   "/api/restaurants/me",
   requireAuth,
-  requireActiveSubscription,
   async (req, res) => {
     try {
       const updatedRestaurant =
@@ -1422,6 +1527,45 @@ app.put(
         error:
           error.message ||
           "Unable to update restaurant."
+      })
+    }
+  }
+)
+app.put(
+  "/api/restaurants/me/account",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const updatedRestaurant =
+        await updateOwnerAccountForSession(
+          req.restaurant._id,
+          req.body
+        )
+
+      if (!updatedRestaurant) {
+        return res.status(404).json({
+          error:
+            "Restaurant account not found."
+        })
+      }
+
+      res.json({
+        success: true,
+        restaurant:
+          sanitizeRestaurantForAuth(
+            updatedRestaurant
+          )
+      })
+    } catch (error) {
+      console.error(
+        "Owner account update error:",
+        error
+      )
+
+      res.status(400).json({
+        error:
+          error.message ||
+          "Unable to update owner account."
       })
     }
   }
@@ -1459,13 +1603,6 @@ app.get(
         })
       }
 
-      if (!hasOperationalSubscriptionAccess(restaurant)) {
-        return res.status(403).json({
-          error:
-            "⚠️ This restaurant is temporarily unavailable for online ordering."
-        })
-      }
-
       res.json({
         success: true,
         restaurant:
@@ -1491,28 +1628,8 @@ app.post(
   "/api/orders",
   async (req, res) => {
     try {
-      const payload = normalizeOrderPayload(req.body)
-      const restaurant =
-        await findRestaurantBySlug(payload.restaurantSlug)
-
-      if (!restaurant) {
-        return res.status(404).json({
-          error: "Restaurant not found."
-        })
-      }
-
-      if (!hasOperationalSubscriptionAccess(restaurant)) {
-        return res.status(403).json({
-          error:
-            "⚠️ This restaurant is temporarily unavailable for online ordering."
-        })
-      }
-
       const order =
-        await saveOrder({
-          ...req.body,
-          restaurantSlug: restaurant.slug
-        })
+        await saveOrder(req.body)
 
       res.json({
         success: true,
@@ -1536,11 +1653,12 @@ app.post(
 
 app.get(
   "/api/orders",
-  requireAuth,
-  requireActiveSubscription,
   async (req, res) => {
     try {
-      const restaurantSlug = req.restaurant.slug
+      const restaurantSlug =
+        normalizeString(
+          req.query.restaurant
+        )
 
       const orders =
         await getOrders(
@@ -1561,11 +1679,76 @@ app.get(
     }
   }
 )
+app.get(
+  "/api/orders/status",
+  async (req, res) => {
+    try {
+      const restaurantSlug =
+        normalizeString(
+          req.query.restaurant
+        ).toLowerCase()
+
+      const tableNumber =
+        Number(req.query.table)
+
+      if (!restaurantSlug) {
+        return res.status(400).json({
+          error:
+            "Restaurant is required."
+        })
+      }
+
+      if (
+        !Number.isInteger(tableNumber) ||
+        tableNumber <= 0
+      ) {
+        return res.status(400).json({
+          error:
+            "A valid table number is required."
+        })
+      }
+
+      const result =
+        await pool.query(
+          `SELECT id
+           FROM orders
+           WHERE restaurant_slug = $1
+             AND table_number = $2
+           ORDER BY created_at DESC`,
+          [
+            restaurantSlug,
+            tableNumber
+          ]
+        )
+
+      const orders = []
+
+      for (const row of result.rows) {
+        const order =
+          await getOrderById(row.id)
+
+        if (order) {
+          orders.push(order)
+        }
+      }
+
+      res.json(orders)
+    } catch (error) {
+      console.error(
+        "Get public order status error:",
+        error
+      )
+
+      res.status(500).json({
+        error:
+          "Failed to fetch order status."
+      })
+    }
+  }
+)
 
 app.patch(
   "/api/orders/:id/status",
-  requireAuth,
-  requireActiveSubscription,
   async (req, res) => {
     try {
       const status =
@@ -1573,7 +1756,11 @@ app.patch(
           req.body?.status
         ).toLowerCase()
 
-      const restaurantSlug = req.restaurant.slug
+      const restaurantSlug =
+        normalizeString(
+          req.body?.restaurantSlug ||
+          req.query.restaurant
+        )
 
       if (!status) {
         return res.status(400).json({
@@ -1643,17 +1830,27 @@ app.use(
 if (require.main === module) {
   startupPromise
     .then(() => {
-      app.listen(PORT, () => {
+      const server = app.listen(PORT, () => {
         console.log(
           `Server running on port ${PORT}`
         )
       })
+
+      server.on("error", (error) => {
+        console.error(
+          "Server failed:",
+          error.message || error
+        )
+      })
     })
-    .catch(() => {
+    .catch((error) => {
+      console.error(
+        "Startup failed:",
+        error.message || error
+      )
       process.exit(1)
     })
 }
 
 module.exports = app
-module.exports.startupPromise =
-  startupPromise
+module.exports.startupPromise = startupPromise

@@ -23,9 +23,9 @@ const keySecret = process.env.RAZORPAY_KEY_SECRET
 const razorpay =
   keyId && keySecret
     ? new Razorpay({
-        key_id: keyId,
-        key_secret: keySecret
-      })
+      key_id: keyId,
+      key_secret: keySecret
+    })
     : null
 
 const plans = {
@@ -269,9 +269,9 @@ router.post("/webhook", async (req, res) => {
       } else {
         const graceEndsAt = currentEnd
           ? new Date(
-              currentEnd.getTime() +
-              3 * 24 * 60 * 60 * 1000
-            )
+            currentEnd.getTime() +
+            3 * 24 * 60 * 60 * 1000
+          )
           : now
 
         await pool.query(
@@ -312,6 +312,75 @@ router.post("/webhook", async (req, res) => {
 
 router.get("/status", requireRestaurant, async (req, res) => {
   const row = req.restaurant
+  // Sync subscription dates from Razorpay when the database
+  // does not have them yet.
+  if (
+    razorpay &&
+    row.razorpay_subscription_id &&
+    (!row.subscription_started_at ||
+      !row.subscription_ends_at)
+  ) {
+    try {
+      const razorpaySubscription =
+        await razorpay.subscriptions.fetch(
+          row.razorpay_subscription_id
+        )
+
+      const startedAt =
+        unixToDate(
+          razorpaySubscription.current_start
+        )
+
+      const endsAt =
+        unixToDate(
+          razorpaySubscription.current_end
+        )
+
+      if (startedAt || endsAt) {
+        const syncResult = await pool.query(
+          `
+                        UPDATE restaurants
+                        SET
+                            subscription_started_at =
+                                COALESCE(
+                                    $1,
+                                    subscription_started_at
+                                ),
+                            subscription_ends_at =
+                                COALESCE(
+                                    $2,
+                                    subscription_ends_at
+                                ),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $3
+                        RETURNING
+                            subscription_started_at,
+                            subscription_ends_at
+                    `,
+          [
+            startedAt,
+            endsAt,
+            row.id
+          ]
+        )
+
+        if (syncResult.rows[0]) {
+          row.subscription_started_at =
+            syncResult.rows[0]
+              .subscription_started_at
+
+          row.subscription_ends_at =
+            syncResult.rows[0]
+              .subscription_ends_at
+        }
+      }
+    } catch (syncError) {
+      console.error(
+        "Subscription date sync error:",
+        syncError
+      )
+    }
+  }
 
   const endsAt = row.subscription_ends_at
     ? new Date(row.subscription_ends_at)

@@ -108,3 +108,176 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+/* ================================
+   ABOUT US PAGE
+   ================================ */
+
+/* About page background */
+.min-h-screen.bg-white {
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at 50% -10%,
+      rgba(255, 255, 255, 0.08),
+      transparent 40%
+    ),
+    #080b12 !important;
+  color: #ffffff;
+}
+
+/* Main content width and spacing */
+.min-h-screen.bg-white > .max-w-4xl {
+  max-width: 900px;
+  padding-top: 42px;
+  padding-bottom: 70px;
+}
+
+/* Back to menu */
+.min-h-screen.bg-white a {
+  color: rgba(255, 255, 255, 0.65) !important;
+  text-decoration: none;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.min-h-screen.bg-white a:hover {
+  color: #ffffff !important;
+  transform: translateX(-3px);
+}
+
+/* Main restaurant card */
+.min-h-screen.bg-white .rounded-2xl.border.p-8 {
+  position: relative;
+  overflow: hidden;
+
+  padding: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 28px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.075),
+      rgba(255, 255, 255, 0.025)
+    ) !important;
+
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  backdrop-filter: blur(20px);
+}
+
+/* Subtle glow at top of card */
+.min-h-screen.bg-white .rounded-2xl.border.p-8::before {
+  content: "";
+  position: absolute;
+  top: -140px;
+  left: 50%;
+  width: 420px;
+  height: 260px;
+
+  transform: translateX(-50%);
+
+  background: rgba(255, 255, 255, 0.06);
+  filter: blur(70px);
+  pointer-events: none;
+}
+
+/* Restaurant logo */
+.min-h-screen.bg-white img {
+  width: 96px;
+  height: 96px;
+
+  object-fit: cover;
+
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.35);
+
+  position: relative;
+}
+
+/* Restaurant name */
+.min-h-screen.bg-white h1 {
+  position: relative;
+
+  margin-top: 8px;
+  margin-bottom: 18px;
+
+  color: #ffffff !important;
+
+  font-size: clamp(38px, 6vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-weight: 700;
+}
+
+/* Description */
+.min-h-screen.bg-white h1 + p {
+  position: relative;
+
+  max-width: 700px;
+
+  color: rgba(255, 255, 255, 0.68) !important;
+
+  font-size: 18px;
+  line-height: 1.8;
+}
+
+/* Divider */
+.min-h-screen.bg-white .border-t {
+  position: relative;
+
+  margin-top: 42px;
+  padding-top: 30px;
+
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Welcome heading */
+.min-h-screen.bg-white h2 {
+  margin-bottom: 12px;
+
+  color: #ffffff !important;
+
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* Welcome text */
+.min-h-screen.bg-white h2 + p {
+  color: rgba(255, 255, 255, 0.58) !important;
+
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .min-h-screen.bg-white > .max-w-4xl {
+    padding: 24px 16px 45px;
+  }
+
+  .min-h-screen.bg-white .rounded-2xl.border.p-8 {
+    padding: 30px 22px;
+    border-radius: 22px;
+  }
+
+  .min-h-screen.bg-white img {
+    width: 76px;
+    height: 76px;
+    border-radius: 20px;
+  }
+
+  .min-h-screen.bg-white h1 {
+    font-size: 40px;
+  }
+
+  .min-h-screen.bg-white h1 + p {
+    font-size: 16px;
+  }
+}

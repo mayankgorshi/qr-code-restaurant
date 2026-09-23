@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom"
 import {
   apiBaseUrl,
   buildMenuUrl,
+  getAuthHeaders,
   getRestaurantSlugFromSearch
 } from "../utils/restaurant"
 
@@ -71,16 +72,7 @@ function getAvoidIngredientsForOrder(order = {}) {
   )
 }
 
-function getSkippedIngredientsForItem(item = {}, avoidIngredients = []) {
-  const itemIngredients = normalizeStringList(item.ingredients)
-  const explicitSkippedIngredients = normalizeStringList(item.skipIngredients)
 
-  if (explicitSkippedIngredients.length > 0) {
-    return explicitSkippedIngredients
-  }
-
-  return avoidIngredients.filter((ingredient) => itemIngredients.includes(ingredient))
-}
 
 function groupOrdersByTable(orders = []) {
   const groupedTables = new Map()
@@ -92,26 +84,31 @@ function groupOrdersByTable(orders = []) {
       groupedTables.set(tableKey, {
         tableNumber: tableKey,
         orders: [],
-        latestCreatedAt: order.createdAt
+        oldestCreatedAt: order.createdAt
       })
     }
 
     const currentTable = groupedTables.get(tableKey)
+
     currentTable.orders.push(order)
 
-    if (
-      order.createdAt &&
-      new Date(order.createdAt).getTime() >
-        new Date(currentTable.latestCreatedAt || 0).getTime()
-    ) {
-      currentTable.latestCreatedAt = order.createdAt
+    const orderTime = new Date(
+      order.createdAt || 0
+    ).getTime()
+
+    const oldestTableOrderTime = new Date(
+      currentTable.oldestCreatedAt || 0
+    ).getTime()
+
+    if (orderTime < oldestTableOrderTime) {
+      currentTable.oldestCreatedAt = order.createdAt
     }
   })
 
   return Array.from(groupedTables.values()).sort(
     (left, right) =>
-      new Date(right.latestCreatedAt || 0).getTime() -
-      new Date(left.latestCreatedAt || 0).getTime()
+      new Date(left.oldestCreatedAt || 0).getTime() -
+      new Date(right.oldestCreatedAt || 0).getTime()
   )
 }
 
@@ -147,15 +144,28 @@ function Kitchen() {
   const loadOrders = useCallback(async () => {
     try {
       const res = await fetch(
-        `${apiBaseUrl}/api/orders?restaurant=${restaurantSlug}`
+        `${apiBaseUrl}/api/orders?restaurant=${restaurantSlug}`,
+        {
+          headers: getAuthHeaders()
+        }
       )
 
       if (!res.ok) {
         throw new Error("Unable to fetch orders.")
       }
 
+
       const data = await res.json()
-      setOrders(Array.isArray(data) ? data : [])
+
+      const activeOrders = Array.isArray(data)
+        ? data.filter(
+          (order) =>
+            normalizeString(order.status).toLowerCase() !==
+            "completed"
+        )
+        : []
+
+      setOrders(activeOrders)
       setError("")
     } catch (err) {
       console.error("Failed to fetch orders", err)
@@ -180,7 +190,10 @@ function Kitchen() {
 
       const res = await fetch(`${apiBaseUrl}/api/orders/${id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders()
+        },
         body: JSON.stringify({ status, restaurantSlug })
       })
 
@@ -204,7 +217,7 @@ function Kitchen() {
       style={{
         width: "100%",
         minHeight: "100vh",
-        padding: "32px 20px",
+        padding: "24px 18px 36px",
         background:
           "linear-gradient(180deg, #020617 0%, #0f172a 45%, #111827 100%)",
         color: "#f8fafc"
@@ -212,7 +225,8 @@ function Kitchen() {
     >
       <div
         style={{
-          maxWidth: "1200px",
+          width: "100%",
+          maxWidth: "1500px",
           margin: "0 auto"
         }}
       >
@@ -226,34 +240,62 @@ function Kitchen() {
             marginBottom: "24px"
           }}
         >
-          <div>
-            <p
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px"
+            }}
+          >
+            <div
               style={{
-                fontSize: "0.82rem",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "#94a3b8",
-                marginBottom: "8px"
+                width: "58px",
+                height: "58px",
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "18px",
+                background:
+                  "linear-gradient(135deg, #f8fafc, #cbd5e1)",
+                boxShadow: "0 8px 20px rgba(2, 6, 23, 0.28)",
+                fontSize: "2rem"
               }}
             >
-              Live kitchen board
-            </p>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "2rem",
-                color: "#f8fafc"
-              }}
-            >
-              {restaurantName} Kitchen Dashboard
-            </h1>
+              👨‍🍳
+            </div>
+
+            <div>
+              <p
+                style={{
+                  fontSize: "0.82rem",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "#94a3b8",
+                  marginBottom: "8px"
+                }}
+              >
+                Live kitchen board
+              </p>
+
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: "2rem",
+                  color: "#f8fafc"
+                }}
+              >
+                {restaurantName} Kitchen Dashboard
+              </h1>
+            </div>
           </div>
 
           <div
             style={{
               display: "flex",
               gap: "10px",
-              flexWrap: "wrap"
+              flexWrap: "wrap",
+              alignItems: "center"
             }}
           >
             <Link
@@ -283,6 +325,91 @@ function Kitchen() {
             >
               Refreshes every 3 seconds
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href =
+                  `/owner/profile?restaurant=${restaurantSlug}`
+              }}
+              aria-label="Open owner profile"
+              title="Owner Profile"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "7px 16px 7px 8px",
+                borderRadius: "999px",
+                border: "1px solid rgba(59, 130, 246, 0.3)",
+                background: "rgba(15, 23, 42, 0.9)",
+                color: "#f8fafc",
+                cursor: "pointer",
+                boxShadow: "0 6px 18px rgba(2, 6, 23, 0.2)"
+              }}
+            >
+              <span
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background:
+                    "linear-gradient(135deg, #1d4ed8, #2563eb)",
+                  border: "1px solid rgba(147, 197, 253, 0.3)",
+                  fontSize: "1.15rem"
+                }}
+              >
+                👤
+              </span>
+
+              <span
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: "3px",
+                  maxWidth: "180px"
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "0.88rem",
+                    fontWeight: 700,
+                    color: "#f8fafc",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: "180px"
+                  }}
+                >
+                  {restaurantName || restaurantSlug}
+                </span>
+
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                    color: "#4ade80"
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      background: "#22c55e"
+                    }}
+                  />
+
+                  Online
+                </span>
+              </span>
+            </button>
           </div>
         </div>
 
@@ -329,8 +456,9 @@ function Kitchen() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: "18px"
+              gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))",
+              gap: "14px",
+              alignItems: "start"
             }}
           >
             {tableGroups.map((tableGroup) => (
@@ -339,12 +467,12 @@ function Kitchen() {
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "16px",
-                  padding: "20px",
-                  borderRadius: "22px",
+                  gap: "8px",
+                  padding: "10px",
+                  borderRadius: "16px",
                   background: "rgba(15, 23, 42, 0.92)",
                   border: "1px solid rgba(148, 163, 184, 0.16)",
-                  boxShadow: "0 18px 40px rgba(2, 6, 23, 0.28)"
+                  boxShadow: "0 12px 28px rgba(2, 6, 23, 0.24)"
                 }}
               >
                 <div
@@ -358,11 +486,44 @@ function Kitchen() {
                   <div>
                     <h2
                       style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
                         margin: 0,
                         color: "#f8fafc",
                         fontSize: "1.2rem"
                       }}
                     >
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "34px",
+                          height: "34px",
+                          borderRadius: "10px",
+                          background: "rgba(59, 130, 246, 0.14)"
+                        }}
+                      >
+                        <svg
+                          width="22"
+                          height="22"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#60a5fa"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect x="4" y="5" width="16" height="7" rx="1.5" />
+                          <path d="M3 12h18" />
+                          <path d="M7 12v7" />
+                          <path d="M17 12v7" />
+                          <path d="M5 19h4" />
+                          <path d="M15 19h4" />
+                        </svg>
+                      </span>
+
                       Table {tableGroup.tableNumber}
                     </h2>
                     <p
@@ -372,7 +533,7 @@ function Kitchen() {
                         fontSize: "0.82rem"
                       }}
                     >
-                      {new Date(tableGroup.latestCreatedAt).toLocaleString()}
+                      {new Date(tableGroup.oldestCreatedAt).toLocaleString()}
                     </p>
                     <p
                       style={{
@@ -401,6 +562,10 @@ function Kitchen() {
                     const customerNote = getCustomerNote(order)
                     const hasKitchenAlert =
                       avoidIngredients.length > 0 || Boolean(customerNote)
+                    const paymentStatus =
+                      normalizeString(order.paymentStatus).toLowerCase()
+
+                    const isPaymentPaid = paymentStatus === "paid"
 
                     return (
                       <section
@@ -408,9 +573,9 @@ function Kitchen() {
                         style={{
                           display: "flex",
                           flexDirection: "column",
-                          gap: "12px",
-                          padding: "14px",
-                          borderRadius: "18px",
+                          gap: "9px",
+                          padding: "10px",
+                          borderRadius: "14px",
                           background: "rgba(30, 41, 59, 0.72)",
                           border: "1px solid rgba(148, 163, 184, 0.12)"
                         }}
@@ -488,99 +653,190 @@ function Kitchen() {
 
                         <div
                           style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "10px"
+                            padding: "12px",
+                            borderRadius: "12px",
+                            background: "rgba(15, 23, 42, 0.5)",
+                            border: "1px solid rgba(148, 163, 184, 0.1)"
                           }}
                         >
-                          {order.items?.map((item, index) => {
-                            const itemIngredients = normalizeStringList(item.ingredients)
-                            const skippedIngredients = getSkippedIngredientsForItem(
-                              item,
-                              avoidIngredients
-                            )
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              marginBottom: "8px",
+                              color: "#cbd5e1",
+                              fontSize: "0.82rem"
+                            }}
+                          >
+                            <span>Subtotal</span>
 
-                            return (
+                            <strong>
+                              ₹{Number(order.subtotal || 0).toFixed(2)}
+                            </strong>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              marginBottom: "8px",
+                              color: "#94a3b8",
+                              fontSize: "0.82rem"
+                            }}
+                          >
+                            <span>GST</span>
+
+                            <span>
+                              ₹{Number(order.gst || 0).toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              marginBottom: "10px",
+                              color: "#94a3b8",
+                              fontSize: "0.82rem"
+                            }}
+                          >
+                            <span>Service Fee</span>
+
+                            <span>
+                              ₹{Number(order.serviceFee || 0).toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              height: "1px",
+                              background: "rgba(148, 163, 184, 0.16)",
+                              marginBottom: "10px"
+                            }}
+                          />
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              marginBottom: "10px",
+                              color: "#f8fafc",
+                              fontSize: "0.95rem"
+                            }}
+                          >
+                            <strong>Total</strong>
+
+                            <strong>
+                              ₹{Number(order.total || 0).toFixed(2)}
+                            </strong>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: "12px",
+                              paddingTop: "10px",
+                              borderTop: "1px solid rgba(148, 163, 184, 0.12)",
+                              fontSize: "0.82rem"
+                            }}
+                          >
+                            <span
+                              style={{
+                                color: "#94a3b8"
+                              }}
+                            >
+                              Payment
+                            </span>
+
+                            <strong
+                              style={{
+                                color: isPaymentPaid
+                                  ? "#86efac"
+                                  : "#fde68a",
+                                textTransform: "capitalize"
+                              }}
+                            >
+                              {isPaymentPaid ? "Paid" : "Pending"}
+                            </strong>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                            padding: "10px",
+                            borderRadius: "14px",
+                            background: "rgba(2, 6, 23, 0.28)",
+                            border: "1px solid rgba(148, 163, 184, 0.08)"
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              color: "#bfdbfe",
+                              fontSize: "0.82rem",
+                              fontWeight: 700
+                            }}
+                          >
+                            <span>🍽️</span>
+
+                            <span>
+                              Items ({order.items?.length || 0})
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px"
+                            }}
+                          >
+                            {order.items?.map((item, index) => (
                               <div
                                 key={`${order._id}-${item.name}-${index}`}
                                 style={{
                                   display: "flex",
-                                  flexDirection: "column",
-                                  gap: "10px",
-                                  padding: "10px 12px",
-                                  borderRadius: "14px",
-                                  background: "rgba(15, 23, 42, 0.65)",
-                                  color: "#e2e8f0"
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  gap: "12px",
+                                  padding: "11px 12px",
+                                  borderRadius: "10px",
+                                  background: "rgba(30, 41, 59, 0.72)",
+                                  border: "1px solid rgba(148, 163, 184, 0.08)",
+                                  color: "#e2e8f0",
+                                  fontSize: "0.86rem"
                                 }}
                               >
-                                <div
+                                <span
                                   style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px"
+                                    fontWeight: 600,
+                                    lineHeight: 1.4
                                   }}
                                 >
-                                  <span>{item.name}</span>
-                                  <strong>x{item.quantity}</strong>
-                                </div>
+                                  {item.name}
+                                </span>
 
-                                {itemIngredients.length > 0 && (
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      gap: "8px"
-                                    }}
-                                  >
-                                    <strong
-                                      style={{
-                                        fontSize: "0.75rem",
-                                        color: "#93c5fd"
-                                      }}
-                                    >
-                                      Ingredients
-                                    </strong>
-
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        flexWrap: "wrap",
-                                        gap: "8px"
-                                      }}
-                                    >
-                                      {itemIngredients.map((ingredient) => {
-                                        const isSkipped =
-                                          skippedIngredients.includes(ingredient)
-
-                                        return (
-                                          <span
-                                            key={`${order._id}-${item.name}-${ingredient}`}
-                                            style={{
-                                              padding: "6px 9px",
-                                              borderRadius: "999px",
-                                              background: isSkipped
-                                                ? "rgba(239, 68, 68, 0.2)"
-                                                : "rgba(59, 130, 246, 0.16)",
-                                              color: isSkipped
-                                                ? "#fecaca"
-                                                : "#dbeafe",
-                                              fontSize: "0.74rem",
-                                              fontWeight: 700,
-                                              textDecoration: isSkipped
-                                                ? "line-through"
-                                                : "none"
-                                            }}
-                                          >
-                                            {ingredient}
-                                          </span>
-                                        )
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
+                                <strong
+                                  style={{
+                                    flexShrink: 0,
+                                    color: "#f8fafc"
+                                  }}
+                                >
+                                  x{item.quantity}
+                                </strong>
                               </div>
-                            )
-                          })}
+                            ))}
+                          </div>
                         </div>
 
                         {hasKitchenAlert && (
@@ -607,11 +863,11 @@ function Kitchen() {
                                   <span
                                     key={`${order._id}-${ingredient}`}
                                     style={{
-                                      padding: "7px 10px",
+                                      padding: "4px 7px",
                                       borderRadius: "999px",
                                       background: "rgba(239, 68, 68, 0.2)",
                                       color: "#fee2e2",
-                                      fontSize: "0.76rem",
+                                      fontSize: "0.68rem",
                                       fontWeight: 700
                                     }}
                                   >
@@ -637,56 +893,112 @@ function Kitchen() {
 
                         <div
                           style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
-                            gap: "10px"
+                            display: "flex",
+                            gap: "8px",
+                            flexWrap: "wrap"
                           }}
                         >
-                          <button
-                            type="button"
-                            onClick={() => updateOrderStatus(order._id, "preparing")}
-                            disabled={isUpdating || order.status === "preparing"}
-                            style={{
-                              padding: "12px 14px",
-                              borderRadius: "14px",
-                              border: "1px solid rgba(96, 165, 250, 0.3)",
-                              background:
-                                order.status === "preparing" ? "#1d4ed8" : "#2563eb",
-                              color: "#eff6ff",
-                              fontWeight: 700,
-                              cursor:
-                                isUpdating || order.status === "preparing"
-                                  ? "not-allowed"
-                                  : "pointer",
-                              opacity:
-                                isUpdating || order.status === "preparing" ? 0.72 : 1
-                            }}
-                          >
-                            Preparing
-                          </button>
+                          {order.status === "pending" && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => updateOrderStatus(order._id, "preparing")}
+                              style={{
+                                flex: 1,
+                                minWidth: "110px",
+                                padding: "9px 12px",
+                                border: "none",
+                                borderRadius: "10px",
+                                background: "#2563eb",
+                                color: "#fff",
+                                fontWeight: 700,
+                                cursor: isUpdating ? "not-allowed" : "pointer",
+                                opacity: isUpdating ? 0.6 : 1
+                              }}
+                            >
+                              Preparing
+                            </button>
+                          )}
 
-                          <button
-                            type="button"
-                            onClick={() => updateOrderStatus(order._id, "ready")}
-                            disabled={isUpdating || order.status === "ready"}
-                            style={{
-                              padding: "12px 14px",
-                              borderRadius: "14px",
-                              border: "1px solid rgba(74, 222, 128, 0.3)",
-                              background:
-                                order.status === "ready" ? "#15803d" : "#16a34a",
-                              color: "#f0fdf4",
-                              fontWeight: 700,
-                              cursor:
-                                isUpdating || order.status === "ready"
-                                  ? "not-allowed"
-                                  : "pointer",
-                              opacity:
-                                isUpdating || order.status === "ready" ? 0.72 : 1
-                            }}
-                          >
-                            Ready
-                          </button>
+                          {order.status === "preparing" && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => updateOrderStatus(order._id, "ready")}
+                              style={{
+                                flex: 1,
+                                minWidth: "110px",
+                                padding: "9px 12px",
+                                border: "none",
+                                borderRadius: "10px",
+                                background: "#16a34a",
+                                color: "#fff",
+                                fontWeight: 700,
+                                cursor: isUpdating ? "not-allowed" : "pointer",
+                                opacity: isUpdating ? 0.6 : 1
+                              }}
+                            >
+                              Ready
+                            </button>
+                          )}
+
+                          {order.status === "ready" && (
+                            <button
+                              type="button"
+                              disabled={isUpdating || !isPaymentPaid}
+                              onClick={() => {
+                                if (!isPaymentPaid) {
+                                  setError(
+                                    "Payment must be completed before closing this order."
+                                  )
+
+                                  return
+                                }
+
+                                updateOrderStatus(order._id, "completed")
+                              }}
+                              style={{
+                                flex: 1,
+                                minWidth: "110px",
+                                padding: "10px 12px",
+                                border: "none",
+                                borderRadius: "10px",
+                                background: isPaymentPaid
+                                  ? "#7c3aed"
+                                  : "rgba(100, 116, 139, 0.35)",
+                                color: isPaymentPaid
+                                  ? "#fff"
+                                  : "#94a3b8",
+                                fontWeight: 700,
+                                cursor:
+                                  isUpdating || !isPaymentPaid
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity: isUpdating ? 0.6 : 1
+                              }}
+                            >
+                              {isPaymentPaid
+                                ? "Completed"
+                                : "Payment Pending"}
+                            </button>
+                          )}
+
+                          {order.status === "completed" && (
+                            <div
+                              style={{
+                                width: "100%",
+                                padding: "9px 12px",
+                                borderRadius: "10px",
+                                background: "rgba(22, 163, 74, 0.12)",
+                                border: "1px solid rgba(74, 222, 128, 0.2)",
+                                color: "#86efac",
+                                textAlign: "center",
+                                fontWeight: 700
+                              }}
+                            >
+                              ✓ Order Completed
+                            </div>
+                          )}
                         </div>
                       </section>
                     )

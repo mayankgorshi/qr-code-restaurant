@@ -18,7 +18,13 @@ function Navbar({ tableNumber, restaurantName, restaurantSlug, description }) {
 
         <div className="nav-right">
           <div className="nav-links">
-            <Link to="/portal">Owner Login</Link>
+            <Link
+              to={`/about?restaurant=${encodeURIComponent(
+                restaurantSlug
+              )}&table=${tableNumber}`}
+            >
+              About Us
+            </Link>
             <a href="#menu-start">Browse Menu</a>
           </div>
         </div>

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react"
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom"
 import Navbar from "./components/navbar"
+import AboutRestaurant from "./pages/AboutRestaurant"
 import Layout from "./components/layout"
 import CartBar from "./components/cartbar"
 import CartDrawer from "./components/cartdrawer"
 import Kitchen from "./pages/kitchen"
+import OwnerProfile from "./pages/OwnerProfile"
 import OrderStatus from "./pages/OrderStatus"
 import RestaurantPortal from "./pages/RestaurantPortal"
 import RestaurantDashboard from "./pages/RestaurantDashboard"
@@ -146,6 +148,8 @@ function App() {
         <Route path="/status" element={<OrderStatus />} />
         <Route path="/portal" element={<RestaurantPortal />} />
         <Route path="/portal/dashboard" element={<RestaurantDashboard />} />
+        <Route path="/about" element={<AboutRestaurant />} />
+        <Route path="/owner/profile" element={<OwnerProfile />} />
       </Routes>
     </BrowserRouter>
   )

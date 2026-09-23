@@ -826,9 +826,22 @@ function RestaurantDashboard() {
         </div>
 
         <div className="dashboard-top-actions">
+          <button
+            type="button"
+            onClick={() => {
+              if (activeSlug) {
+                navigate(buildKitchenUrl(activeSlug))
+              }
+            }}
+            disabled={!activeSlug}
+          >
+            Open Kitchen
+          </button>
+
           <a href={publicMenuUrl} target="_blank" rel="noreferrer">
             Open Public Menu
           </a>
+
           <button type="button" onClick={handleLogout}>
             Logout
           </button>
@@ -1036,150 +1049,150 @@ function RestaurantDashboard() {
 
           <div className="dashboard-collapsible-body">
             <div className="dashboard-qr-layout">
-            <div className="dashboard-qr-panel">
-              <div className="dashboard-qr-controls">
-                <label>
-                  <span>Start Table</span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={qrStartTable}
-                    onChange={(event) =>
-                      setQrStartTable(Math.max(1, Number(event.target.value) || 1))
-                    }
-                  />
-                </label>
+              <div className="dashboard-qr-panel">
+                <div className="dashboard-qr-controls">
+                  <label>
+                    <span>Start Table</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={qrStartTable}
+                      onChange={(event) =>
+                        setQrStartTable(Math.max(1, Number(event.target.value) || 1))
+                      }
+                    />
+                  </label>
 
-                <label>
-                  <span>Total Tables</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={qrTableCount}
-                    onChange={(event) =>
-                      setQrTableCount(
-                        Math.min(100, Math.max(1, Number(event.target.value) || 1))
-                      )
-                    }
-                  />
-                </label>
-              </div>
+                  <label>
+                    <span>Total Tables</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={qrTableCount}
+                      onChange={(event) =>
+                        setQrTableCount(
+                          Math.min(100, Math.max(1, Number(event.target.value) || 1))
+                        )
+                      }
+                    />
+                  </label>
+                </div>
 
-              <div className="dashboard-helper-box">
-                <strong>Which URL will this QR open?</strong>
-                <p>
-                  Example current preview:{" "}
-                  {previewQrCard?.fullUrl || "Save your slug and the live menu link will appear here."}
-                </p>
-              </div>
-
-              <div className="dashboard-qr-actions">
-                <button
-                  type="button"
-                  className="dashboard-copy-button"
-                  onClick={() =>
-                    copyValue(previewQrCard?.fullUrl || "", "QR menu link")
-                  }
-                >
-                  {copiedTarget === "QR menu link" ? "Copied" : "Copy Preview Link"}
-                </button>
-
-                <button
-                  type="button"
-                  className="dashboard-copy-button"
-                  onClick={() => previewQrCard && downloadSingleQr(previewQrCard)}
-                >
-                  Download Preview QR
-                </button>
-
-                <button
-                  type="button"
-                  className="dashboard-add-button"
-                  onClick={printQrSheet}
-                >
-                  Print QR Sheet
-                </button>
-
-                <button
-                  type="button"
-                  className="dashboard-add-button dashboard-pdf-button"
-                  onClick={exportQrPdf}
-                >
-                  Export PDF
-                </button>
-              </div>
-            </div>
-
-            <div className="dashboard-qr-preview">
-              {isQrLoading ? (
-                <div className="dashboard-qr-empty">Generating local QR preview...</div>
-              ) : previewQrCard ? (
-                <>
-                  <div
-                    className="dashboard-qr-svg"
-                    dangerouslySetInnerHTML={{ __html: previewQrCard.svg }}
-                  />
+                <div className="dashboard-helper-box">
+                  <strong>Which URL will this QR open?</strong>
                   <p>
-                    Table {previewQrCard.tableNumber} preview for{" "}
-                    <strong>{activeSlug}</strong>
+                    Example current preview:{" "}
+                    {previewQrCard?.fullUrl || "Save your slug and the live menu link will appear here."}
                   </p>
-                </>
-              ) : (
-                <div className="dashboard-qr-empty">
-                  Save your slug and the QR preview will appear here.
                 </div>
-              )}
+
+                <div className="dashboard-qr-actions">
+                  <button
+                    type="button"
+                    className="dashboard-copy-button"
+                    onClick={() =>
+                      copyValue(previewQrCard?.fullUrl || "", "QR menu link")
+                    }
+                  >
+                    {copiedTarget === "QR menu link" ? "Copied" : "Copy Preview Link"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dashboard-copy-button"
+                    onClick={() => previewQrCard && downloadSingleQr(previewQrCard)}
+                  >
+                    Download Preview QR
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dashboard-add-button"
+                    onClick={printQrSheet}
+                  >
+                    Print QR Sheet
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dashboard-add-button dashboard-pdf-button"
+                    onClick={exportQrPdf}
+                  >
+                    Export PDF
+                  </button>
+                </div>
+              </div>
+
+              <div className="dashboard-qr-preview">
+                {isQrLoading ? (
+                  <div className="dashboard-qr-empty">Generating local QR preview...</div>
+                ) : previewQrCard ? (
+                  <>
+                    <div
+                      className="dashboard-qr-svg"
+                      dangerouslySetInnerHTML={{ __html: previewQrCard.svg }}
+                    />
+                    <p>
+                      Table {previewQrCard.tableNumber} preview for{" "}
+                      <strong>{activeSlug}</strong>
+                    </p>
+                  </>
+                ) : (
+                  <div className="dashboard-qr-empty">
+                    Save your slug and the QR preview will appear here.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="dashboard-print-header">
-            <h3>{restaurantName || "Restaurant"} Table QR Sheet</h3>
-            <p>
-              These cards are designed for direct printing as table stickers or tent cards.
-            </p>
-          </div>
+            <div className="dashboard-print-header">
+              <h3>{restaurantName || "Restaurant"} Table QR Sheet</h3>
+              <p>
+                These cards are designed for direct printing as table stickers or tent cards.
+              </p>
+            </div>
 
-          <div className="dashboard-qr-sheet">
-            {qrCards.map((card) => (
-              <article key={`qr-${card.tableNumber}`} className="dashboard-qr-card">
-                <div className="dashboard-qr-card-top">
-                  <span className="dashboard-qr-card-label">Scan To Order</span>
-                  <strong>Table {card.tableNumber}</strong>
-                </div>
+            <div className="dashboard-qr-sheet">
+              {qrCards.map((card) => (
+                <article key={`qr-${card.tableNumber}`} className="dashboard-qr-card">
+                  <div className="dashboard-qr-card-top">
+                    <span className="dashboard-qr-card-label">Scan To Order</span>
+                    <strong>Table {card.tableNumber}</strong>
+                  </div>
 
-                <div className="dashboard-qr-card-brand">
-                  <div className="dashboard-qr-card-brand-top">
-                    {logo ? (
-                      <img
-                        src={logo}
-                        alt={restaurantName || "Restaurant logo"}
-                        className="dashboard-qr-card-logo"
-                      />
-                    ) : null}
-                    <div>
-                      <h4>{restaurantName || "Restaurant"}</h4>
-                      <p>{activeSlug}</p>
+                  <div className="dashboard-qr-card-brand">
+                    <div className="dashboard-qr-card-brand-top">
+                      {logo ? (
+                        <img
+                          src={logo}
+                          alt={restaurantName || "Restaurant logo"}
+                          className="dashboard-qr-card-logo"
+                        />
+                      ) : null}
+                      <div>
+                        <h4>{restaurantName || "Restaurant"}</h4>
+                        <p>{activeSlug}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div
-                  className="dashboard-qr-card-svg"
-                  dangerouslySetInnerHTML={{ __html: card.svg }}
-                />
+                  <div
+                    className="dashboard-qr-card-svg"
+                    dangerouslySetInnerHTML={{ __html: card.svg }}
+                  />
 
-                <p className="dashboard-qr-card-link">{card.menuPath}</p>
+                  <p className="dashboard-qr-card-link">{card.menuPath}</p>
 
-                <button
-                  type="button"
-                  className="dashboard-copy-button dashboard-qr-download"
-                  onClick={() => downloadSingleQr(card)}
-                >
-                  Download Table {card.tableNumber}
-                </button>
-              </article>
-            ))}
+                  <button
+                    type="button"
+                    className="dashboard-copy-button dashboard-qr-download"
+                    onClick={() => downloadSingleQr(card)}
+                  >
+                    Download Table {card.tableNumber}
+                  </button>
+                </article>
+              ))}
             </div>
           </div>
         </article>
@@ -1222,191 +1235,191 @@ function RestaurantDashboard() {
 
         <div className="dashboard-collapsible-body">
           <div className="dashboard-toolbar">
-          <label>
-            <span>Search</span>
-            <input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search by dish, category, ingredient"
-            />
-          </label>
+            <label>
+              <span>Search</span>
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by dish, category, ingredient"
+              />
+            </label>
 
-          <label>
-            <span>Visibility</span>
-            <select
-              value={availabilityFilter}
-              onChange={(event) => setAvailabilityFilter(event.target.value)}
+            <label>
+              <span>Visibility</span>
+              <select
+                value={availabilityFilter}
+                onChange={(event) => setAvailabilityFilter(event.target.value)}
+              >
+                <option value="all">All Items</option>
+                <option value="live">Live Only</option>
+                <option value="hidden">Hidden Only</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Sort</span>
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+              >
+                <option value="latest">Latest Added</option>
+                <option value="name-asc">Name A-Z</option>
+                <option value="price-low">Price Low to High</option>
+                <option value="price-high">Price High to Low</option>
+                <option value="category">Category</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              className="dashboard-toolbar-reset"
+              onClick={clearMenuFilters}
             >
-              <option value="all">All Items</option>
-              <option value="live">Live Only</option>
-              <option value="hidden">Hidden Only</option>
-            </select>
-          </label>
+              Reset Filters
+            </button>
+          </div>
 
-          <label>
-            <span>Sort</span>
-            <select
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-            >
-              <option value="latest">Latest Added</option>
-              <option value="name-asc">Name A-Z</option>
-              <option value="price-low">Price Low to High</option>
-              <option value="price-high">Price High to Low</option>
-              <option value="category">Category</option>
-            </select>
-          </label>
-
-          <button
-            type="button"
-            className="dashboard-toolbar-reset"
-            onClick={clearMenuFilters}
-          >
-            Reset Filters
-          </button>
-        </div>
-
-        <div className="dashboard-menu-list">
-          {visibleMenu.length === 0 && (
-            <div className="dashboard-empty-results">
-              No menu items matched the current filters.
-            </div>
-          )}
-
-          {visibleMenu.map((item, index) => (
-            <article key={item.itemId} className="dashboard-menu-card">
-              <div className="dashboard-menu-head">
-                <div className="dashboard-menu-title-wrap">
-                  <strong>Item {index + 1}</strong>
-                  <span>
-                    {item.isAvailable ? "Live on menu" : "Hidden from menu"}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  className="dashboard-remove"
-                  onClick={() => removeMenuItem(item.itemId)}
-                >
-                  Remove
-                </button>
+          <div className="dashboard-menu-list">
+            {visibleMenu.length === 0 && (
+              <div className="dashboard-empty-results">
+                No menu items matched the current filters.
               </div>
+            )}
 
-              <div className="dashboard-menu-grid">
-                <label>
-                  <span>Name</span>
-                  <input
-                    value={item.name}
-                    onChange={(event) =>
-                      updateMenuItem(item.itemId, "name", event.target.value)
-                    }
-                    placeholder="Dish name"
-                  />
-                </label>
-
-                <label>
-                  <span>Price</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={item.price}
-                    onChange={(event) =>
-                      updateMenuItem(item.itemId, "price", event.target.value)
-                    }
-                    placeholder="0"
-                  />
-                </label>
-
-                <label>
-                  <span>Category</span>
-                  <input
-                    value={item.category}
-                    onChange={(event) =>
-                      updateMenuItem(item.itemId, "category", event.target.value)
-                    }
-                    placeholder="Example: Mocktails"
-                  />
-                </label>
-
-                <label>
-                  <span>Image URL</span>
-                  <input
-                    value={item.image}
-                    onChange={(event) =>
-                      updateMenuItem(item.itemId, "image", event.target.value)
-                    }
-                    placeholder="https://... or upload below"
-                  />
-                </label>
-
-                <label className="dashboard-full-width">
-                  <span>Ingredients</span>
-                  <input
-                    value={item.ingredients}
-                    onChange={(event) =>
-                      updateMenuItem(item.itemId, "ingredients", event.target.value)
-                    }
-                    placeholder="Paneer, Butter, Onion, Tomato"
-                  />
-                </label>
-
-                <div className="dashboard-full-width dashboard-image-uploader">
-                  <div className="dashboard-upload-head">
-                    <span>Menu Item Image</span>
-                    <label className="dashboard-upload-button">
-                      Upload Image
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(event) => handleImageUpload(item.itemId, event)}
-                      />
-                    </label>
+            {visibleMenu.map((item, index) => (
+              <article key={item.itemId} className="dashboard-menu-card">
+                <div className="dashboard-menu-head">
+                  <div className="dashboard-menu-title-wrap">
+                    <strong>Item {index + 1}</strong>
+                    <span>
+                      {item.isAvailable ? "Live on menu" : "Hidden from menu"}
+                    </span>
                   </div>
 
-                  {item.image ? (
-                    <div className="dashboard-image-preview">
-                      <img src={item.image} alt={item.name || "Menu preview"} />
-                      <button
-                        type="button"
-                        className="dashboard-copy-button"
-                        onClick={() => updateMenuItem(item.itemId, "image", "")}
-                      >
-                        Remove Image
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="dashboard-image-placeholder">
-                      No image selected yet.
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    className="dashboard-remove"
+                    onClick={() => removeMenuItem(item.itemId)}
+                  >
+                    Remove
+                  </button>
                 </div>
 
-                <label className="dashboard-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={item.isAvailable}
-                    onChange={(event) =>
-                      updateMenuItem(item.itemId, "isAvailable", event.target.checked)
-                    }
-                  />
-                  <span>Available on public menu</span>
-                </label>
-              </div>
-            </article>
-          ))}
-        </div>
+                <div className="dashboard-menu-grid">
+                  <label>
+                    <span>Name</span>
+                    <input
+                      value={item.name}
+                      onChange={(event) =>
+                        updateMenuItem(item.itemId, "name", event.target.value)
+                      }
+                      placeholder="Dish name"
+                    />
+                  </label>
 
-        <div className="dashboard-save-bar">
-          <button
-            type="button"
-            className="portal-submit"
-            onClick={saveRestaurantChanges}
-            disabled={isSaving}
-          >
-            {isSaving ? "Saving..." : "Save Restaurant & Menu"}
-          </button>
-        </div>
+                  <label>
+                    <span>Price</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={item.price}
+                      onChange={(event) =>
+                        updateMenuItem(item.itemId, "price", event.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Category</span>
+                    <input
+                      value={item.category}
+                      onChange={(event) =>
+                        updateMenuItem(item.itemId, "category", event.target.value)
+                      }
+                      placeholder="Example: Mocktails"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Image URL</span>
+                    <input
+                      value={item.image}
+                      onChange={(event) =>
+                        updateMenuItem(item.itemId, "image", event.target.value)
+                      }
+                      placeholder="https://... or upload below"
+                    />
+                  </label>
+
+                  <label className="dashboard-full-width">
+                    <span>Ingredients</span>
+                    <input
+                      value={item.ingredients}
+                      onChange={(event) =>
+                        updateMenuItem(item.itemId, "ingredients", event.target.value)
+                      }
+                      placeholder="Paneer, Butter, Onion, Tomato"
+                    />
+                  </label>
+
+                  <div className="dashboard-full-width dashboard-image-uploader">
+                    <div className="dashboard-upload-head">
+                      <span>Menu Item Image</span>
+                      <label className="dashboard-upload-button">
+                        Upload Image
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) => handleImageUpload(item.itemId, event)}
+                        />
+                      </label>
+                    </div>
+
+                    {item.image ? (
+                      <div className="dashboard-image-preview">
+                        <img src={item.image} alt={item.name || "Menu preview"} />
+                        <button
+                          type="button"
+                          className="dashboard-copy-button"
+                          onClick={() => updateMenuItem(item.itemId, "image", "")}
+                        >
+                          Remove Image
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="dashboard-image-placeholder">
+                        No image selected yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="dashboard-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={item.isAvailable}
+                      onChange={(event) =>
+                        updateMenuItem(item.itemId, "isAvailable", event.target.checked)
+                      }
+                    />
+                    <span>Available on public menu</span>
+                  </label>
+                </div>
+              </article>
+            ))}
           </div>
+
+          <div className="dashboard-save-bar">
+            <button
+              type="button"
+              className="portal-submit"
+              onClick={saveRestaurantChanges}
+              disabled={isSaving}
+            >
+              {isSaving ? "Saving..." : "Save Restaurant & Menu"}
+            </button>
+          </div>
+        </div>
       </section>
 
       <section className="dashboard-grid">
@@ -1498,44 +1511,44 @@ function RestaurantDashboard() {
           {(restaurant?.subscriptionStatus === "trialing" ||
             restaurant?.subscriptionStatus === "grace" ||
             restaurant?.subscriptionStatus === "expired") && (
-            <div className="dashboard-grid dashboard-grid-top">
-              <div className="dashboard-usage-panel">
-                <strong>Monthly</strong>
-                <p>Full restaurant platform access for ₹999 per month.</p>
+              <div className="dashboard-grid dashboard-grid-top">
+                <div className="dashboard-usage-panel">
+                  <strong>Monthly</strong>
+                  <p>Full restaurant platform access for ₹999 per month.</p>
 
-                <button
-                  type="button"
-                  className="dashboard-secondary"
-                  onClick={() => handleSubscribe("monthly")}
-                  disabled={subscriptionLoading}
-                >
-                  {subscriptionLoading
-                    ? "Opening Razorpay..."
-                    : restaurant?.subscriptionStatus === "trialing"
-                      ? "Subscribe ₹999 / month"
-                      : "Renew ₹999 / month"}
-                </button>
+                  <button
+                    type="button"
+                    className="dashboard-secondary"
+                    onClick={() => handleSubscribe("monthly")}
+                    disabled={subscriptionLoading}
+                  >
+                    {subscriptionLoading
+                      ? "Opening Razorpay..."
+                      : restaurant?.subscriptionStatus === "trialing"
+                        ? "Subscribe ₹999 / month"
+                        : "Renew ₹999 / month"}
+                  </button>
+                </div>
+
+                <div className="dashboard-usage-panel">
+                  <strong>Yearly</strong>
+                  <p>Full restaurant platform access for ₹9,999 per year.</p>
+
+                  <button
+                    type="button"
+                    className="dashboard-secondary"
+                    onClick={() => handleSubscribe("yearly")}
+                    disabled={subscriptionLoading}
+                  >
+                    {subscriptionLoading
+                      ? "Opening Razorpay..."
+                      : restaurant?.subscriptionStatus === "trialing"
+                        ? "Subscribe ₹9,999 / year"
+                        : "Renew ₹9,999 / year"}
+                  </button>
+                </div>
               </div>
-
-              <div className="dashboard-usage-panel">
-                <strong>Yearly</strong>
-                <p>Full restaurant platform access for ₹9,999 per year.</p>
-
-                <button
-                  type="button"
-                  className="dashboard-secondary"
-                  onClick={() => handleSubscribe("yearly")}
-                  disabled={subscriptionLoading}
-                >
-                  {subscriptionLoading
-                    ? "Opening Razorpay..."
-                    : restaurant?.subscriptionStatus === "trialing"
-                      ? "Subscribe ₹9,999 / year"
-                      : "Renew ₹9,999 / year"}
-                </button>
-              </div>
-            </div>
-          )}
+            )}
 
           {restaurant?.subscriptionStatus === "active" && (
             <div className="dashboard-usage-panel">

@@ -102,7 +102,8 @@ function CartDrawer({
           avoidIngredients: allergySelections,
           note: specialInstructions.trim()
         },
-        status: "pending"
+        status: "pending",
+        paymentMethod: selectedPaymentMethod
       })
     })
 
