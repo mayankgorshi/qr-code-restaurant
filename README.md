@@ -52,6 +52,11 @@ The project focuses on building a practical restaurant management workflow using
 
 The project includes screenshots of:
 
+<img width="1720" height="913" alt="owner-control" src="https://github.com/user-attachments/assets/b6291530-5918-4846-bdbe-8b1ef3bab1ed" />
+<img width="1722" height="911" alt="kitchen-dashboard" src="https://github.com/user-attachments/assets/53a51eab-126b-49b8-bfc0-f6698918d69e" />
+<img width="1542" height="812" alt="login" src="https://github.com/user-attachments/assets/cff0e393-781c-4044-a12b-dc6c99d3ff47" />
+<img width="1295" height="786" alt="restaurant-settings" src="https://github.com/user-attachments/assets/493c5d48-bbe2-4062-ac4e-8ebefcbf874e" />
+
 - Login
 - Customer cart
 - Kitchen dashboard
